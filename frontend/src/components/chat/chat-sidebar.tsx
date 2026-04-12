@@ -53,20 +53,21 @@ export function ChatSidebar({
   return (
     <div className="flex h-full w-64 flex-col bg-sidebar shadow-[2px_0_8px_-2px_oklch(0_0_0/0.08)]">
 
-      {/* 상단: 로고 + 새 대화 + 검색 */}
-      <div className="p-3 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Scale className="h-5 w-5 text-primary" />
-            <span className="text-[length:var(--text-base)] font-semibold">Glluga 법령 Assistant</span>
-          </div>
-          {onSearchToggle && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onSearchToggle}>
-              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-            </Button>
-          )}
+      {/* 로고 */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-1">
+        <div className="flex items-center gap-2">
+          <Scale className="h-5 w-5 text-primary" />
+          <span className="text-[length:var(--text-base)] font-semibold">Glluga 법령 Assistant</span>
         </div>
+        {onSearchToggle && (
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onSearchToggle}>
+            {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+          </Button>
+        )}
+      </div>
 
+      {/* 새 대화 + 검색 */}
+      <div className="px-3 pt-4 pb-3 space-y-2">
         {searchOpen && onSearchChange && (
           <Input
             value={searchQuery}
