@@ -21,6 +21,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Glluga 법령 Assistant",
   description: "한국 법령/판례 AI 검색",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
