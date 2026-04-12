@@ -57,7 +57,7 @@ export function ChatSidebar({
       <div className="flex h-14 items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <Scale className="h-5 w-5 text-primary" />
-          <span className="text-[length:var(--text-base)] font-semibold">Glluga Statute</span>
+          <span className="text-[length:var(--text-base)] font-semibold">Glluga 법령 Assistant</span>
         </div>
         {onSearchToggle && (
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onSearchToggle}>

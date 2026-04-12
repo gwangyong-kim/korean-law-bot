@@ -191,7 +191,7 @@ function ChatApp({ userName }: { userName: string }) {
               <>
                 <Scale className="h-5 w-5 text-primary" />
                 <span className="text-[length:var(--text-base)] font-semibold hidden sm:inline">
-                  {headerTitle || "Glluga Statute"}
+                  {headerTitle || "Glluga 법령 Assistant"}
                 </span>
               </>
             )}
@@ -240,7 +240,7 @@ function LoginPage() {
         <Scale className="h-10 w-10 text-primary" />
       </div>
       <div className="text-center">
-        <h1 className="text-[length:var(--text-2xl)] font-bold">Glluga Statute</h1>
+        <h1 className="text-[length:var(--text-2xl)] font-bold">Glluga 법령 Assistant</h1>
         <p className="mt-2 text-[length:var(--text-sm)] text-muted-foreground">
           회사 계정으로 로그인하여 한국 법령을 검색하세요
         </p>
