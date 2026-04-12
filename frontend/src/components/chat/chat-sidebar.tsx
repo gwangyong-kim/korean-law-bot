@@ -1,7 +1,6 @@
 "use client";
 
 import { Plus, MessageSquare, Trash2, Scale, Search, X, BookOpen, History } from "lucide-react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,12 +8,16 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/lib/conversations";
 
+type ViewMode = "chat" | "guide" | "updates";
+
 interface ChatSidebarProps {
   conversations: Conversation[];
   activeId: string | null;
+  activeView: ViewMode;
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
+  onViewMode: (mode: ViewMode) => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   searchOpen?: boolean;
@@ -24,15 +27,16 @@ interface ChatSidebarProps {
 export function ChatSidebar({
   conversations,
   activeId,
+  activeView,
   onSelect,
   onNew,
   onDelete,
+  onViewMode,
   searchQuery = "",
   onSearchChange,
   searchOpen = false,
   onSearchToggle,
 }: ChatSidebarProps) {
-  // 날짜별 그룹핑
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayTs = today.getTime();
@@ -102,7 +106,7 @@ export function ChatSidebar({
                   key={conv.id}
                   className={cn(
                     "group flex items-center gap-2 rounded-lg px-3 py-2 cursor-pointer transition-colors",
-                    activeId === conv.id
+                    activeView === "chat" && activeId === conv.id
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "hover:bg-sidebar-accent/50"
                   )}
@@ -128,20 +132,32 @@ export function ChatSidebar({
         )}
       </ScrollArea>
 
-      {/* 가이드 / 업데이트 링크 */}
+      {/* 가이드 / 업데이트 */}
       <div className="px-3 py-1 space-y-0.5">
-        <Link href="/guide">
-          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
-            <BookOpen className="h-3.5 w-3.5" />
-            <span className="text-[length:var(--text-sm)]">사용 가이드</span>
-          </Button>
-        </Link>
-        <Link href="/updates">
-          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
-            <History className="h-3.5 w-3.5" />
-            <span className="text-[length:var(--text-sm)]">업데이트</span>
-          </Button>
-        </Link>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "w-full justify-start gap-2",
+            activeView === "guide" ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground"
+          )}
+          onClick={() => onViewMode("guide")}
+        >
+          <BookOpen className="h-3.5 w-3.5" />
+          <span className="text-[length:var(--text-sm)]">사용 가이드</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "w-full justify-start gap-2",
+            activeView === "updates" ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground"
+          )}
+          onClick={() => onViewMode("updates")}
+        >
+          <History className="h-3.5 w-3.5" />
+          <span className="text-[length:var(--text-sm)]">업데이트</span>
+        </Button>
       </div>
 
       {/* 단축키 힌트 */}

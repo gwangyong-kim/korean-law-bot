@@ -4,10 +4,11 @@ import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useCallback, useEffect } from "react";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
+import { GuideView } from "@/components/chat/guide-view";
+import { UpdatesView } from "@/components/chat/updates-view";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { LogOut, PanelLeftClose, PanelLeft, Search, X } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Scale } from "lucide-react";
 import {
@@ -19,6 +20,8 @@ import {
   type Conversation,
   type Message,
 } from "@/lib/conversations";
+
+type ViewMode = "chat" | "guide" | "updates";
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -44,8 +47,9 @@ function ChatApp({ userName }: { userName: string }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("chat");
 
-  // 초기 로드 — 대화가 없으면 자동으로 새 대화 생성
+  // 초기 로드
   useEffect(() => {
     const all = getConversations();
     if (all.length > 0) {
@@ -61,22 +65,18 @@ function ChatApp({ userName }: { userName: string }) {
   // 키보드 단축키
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      // Ctrl+N: 새 대화
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "O") {
         e.preventDefault();
         handleNew();
       }
-      // Ctrl+/: 대화 검색 토글
       if ((e.ctrlKey || e.metaKey) && e.key === "/") {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
       }
-      // Ctrl+B: 사이드바 토글
       if ((e.ctrlKey || e.metaKey) && e.key === "b") {
         e.preventDefault();
         setSidebarOpen((prev) => !prev);
       }
-      // Escape: 검색 닫기
       if (e.key === "Escape" && searchOpen) {
         setSearchOpen(false);
         setSearchQuery("");
@@ -90,12 +90,13 @@ function ChatApp({ userName }: { userName: string }) {
     const conv = createConversation();
     setConversations(getConversations());
     setActiveId(conv.id);
-    // 모바일에서 새 대화 시 사이드바 닫기
+    setViewMode("chat");
     if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
   const handleSelect = useCallback((id: string) => {
     setActiveId(id);
+    setViewMode("chat");
     if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
@@ -120,7 +121,11 @@ function ChatApp({ userName }: { userName: string }) {
     [activeId]
   );
 
-  // 대화 검색 필터
+  const handleViewMode = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (window.innerWidth < 768) setSidebarOpen(false);
+  }, []);
+
   const filteredConversations = searchQuery
     ? conversations.filter(
         (c) =>
@@ -131,12 +136,14 @@ function ChatApp({ userName }: { userName: string }) {
 
   const activeConversation = activeId ? getConversation(activeId) : undefined;
 
+  // 헤더 타이틀
+  const headerTitle = viewMode === "guide" ? "사용 가이드" : viewMode === "updates" ? "업데이트" : "";
+
   return (
     <div className="flex h-full">
-      {/* 사이드바 — 모바일에서 오버레이 */}
+      {/* 사이드바 */}
       {sidebarOpen && (
         <>
-          {/* 모바일 백드롭 */}
           <div
             className="fixed inset-0 z-40 bg-black/50 md:hidden"
             onClick={() => setSidebarOpen(false)}
@@ -144,10 +151,12 @@ function ChatApp({ userName }: { userName: string }) {
           <div className="fixed inset-y-0 left-0 z-50 md:relative md:z-auto">
             <ChatSidebar
               conversations={filteredConversations}
-              activeId={activeId}
+              activeId={viewMode === "chat" ? activeId : null}
+              activeView={viewMode}
               onSelect={handleSelect}
               onNew={handleNew}
               onDelete={handleDelete}
+              onViewMode={handleViewMode}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               searchOpen={searchOpen}
@@ -162,7 +171,6 @@ function ChatApp({ userName }: { userName: string }) {
 
       {/* 메인 영역 */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* 헤더 */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
           <div className="flex items-center gap-2">
             <Button
@@ -177,10 +185,12 @@ function ChatApp({ userName }: { userName: string }) {
                 <PanelLeft className="h-4 w-4" />
               )}
             </Button>
-            {!sidebarOpen && (
+            {(!sidebarOpen || headerTitle) && (
               <>
                 <Scale className="h-5 w-5 text-primary" />
-                <span className="text-[length:var(--text-base)] font-semibold hidden sm:inline">법령 검색</span>
+                <span className="text-[length:var(--text-base)] font-semibold hidden sm:inline">
+                  {headerTitle || "법령 검색"}
+                </span>
               </>
             )}
           </div>
@@ -189,20 +199,18 @@ function ChatApp({ userName }: { userName: string }) {
               {userName}
             </span>
             <ThemeToggle />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => signOut()}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => signOut()}>
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </header>
 
-        {/* 채팅 */}
         <main className="flex-1 overflow-hidden">
-          {activeId ? (
+          {viewMode === "guide" ? (
+            <GuideView />
+          ) : viewMode === "updates" ? (
+            <UpdatesView />
+          ) : activeId ? (
             <ChatContainer
               key={activeId}
               conversationId={activeId}

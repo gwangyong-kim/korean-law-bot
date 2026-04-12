@@ -1,7 +1,8 @@
-import { ArrowLeft, BookOpen, MessageSquare, Search, FileText, Scale, AlertTriangle, Lightbulb, CheckCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+"use client";
+
+import { MessageSquare, Search, FileText, Scale, AlertTriangle, Lightbulb, CheckCircle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import Link from "next/link";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const EXAMPLES = [
   {
@@ -46,20 +47,9 @@ const TIPS = [
   { icon: AlertTriangle, title: "법률 자문이 아닙니다", desc: "이 도구는 법령 정보를 쉽게 찾아주는 검색 도우미입니다. 중요한 법적 판단은 반드시 전문가(법무팀, 변호사)에게 확인하세요." },
 ];
 
-export default function GuidePage() {
+export function GuideView() {
   return (
-    <div className="min-h-full bg-background">
-      {/* 헤더 */}
-      <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border bg-background/80 backdrop-blur-sm px-4">
-        <Link href="/">
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <BookOpen className="h-5 w-5 text-primary" />
-        <span className="text-[length:var(--text-base)] font-semibold">사용 가이드</span>
-      </header>
-
+    <ScrollArea className="h-full">
       <div className="mx-auto max-w-3xl px-4 py-8">
         {/* 소개 */}
         <div className="text-center mb-10">
@@ -75,7 +65,6 @@ export default function GuidePage() {
 
         {/* 이런 걸 물어보세요 */}
         <h2 className="text-[length:var(--text-xl)] font-semibold mb-6">이런 걸 물어보세요</h2>
-
         <div className="space-y-8 mb-12">
           {EXAMPLES.map((section) => (
             <div key={section.category}>
@@ -103,15 +92,9 @@ export default function GuidePage() {
         <h2 className="text-[length:var(--text-xl)] font-semibold mb-4">검색할 수 있는 범위</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-12">
           {[
-            "법률 · 시행령 · 시행규칙",
-            "대법원 판례",
-            "헌법재판소 결정",
-            "조세심판원 재결",
-            "행정규칙",
-            "자치법규 · 조례",
-            "행정심판례",
-            "관세청 법령해석",
-            "노동위원회 결정",
+            "법률 · 시행령 · 시행규칙", "대법원 판례", "헌법재판소 결정",
+            "조세심판원 재결", "행정규칙", "자치법규 · 조례",
+            "행정심판례", "관세청 법령해석", "노동위원회 결정",
           ].map((item) => (
             <div key={item} className="rounded-lg bg-muted/50 px-3 py-2 text-center text-[length:var(--text-sm)]">
               {item}
@@ -152,6 +135,6 @@ export default function GuidePage() {
           ))}
         </div>
       </div>
-    </div>
+    </ScrollArea>
   );
 }

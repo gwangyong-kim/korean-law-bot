@@ -1,8 +1,11 @@
-import { ArrowLeft, History, Tag } from "lucide-react";
-import { Button } from "@/components/ui/button";
+"use client";
+
+import { useEffect, useState } from "react";
+import { History, Tag } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import Link from "next/link";
 
 const GITHUB_REPO = "chrisryugj/korean-law-mcp";
 
@@ -14,38 +17,37 @@ interface Release {
   published_at: string;
 }
 
-async function getReleases(): Promise<Release[]> {
-  try {
-    const res = await fetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=20`,
-      {
-        next: { revalidate: 3600 },
-      }
-    );
-    if (!res.ok) return [];
-    return res.json();
-  } catch {
-    return [];
-  }
-}
+export function UpdatesView() {
+  const [releases, setReleases] = useState<Release[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default async function UpdatesPage() {
-  const releases = await getReleases();
+  useEffect(() => {
+    fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=20`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setReleases)
+      .catch(() => setReleases([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="min-h-full bg-background">
-      <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border bg-background/80 backdrop-blur-sm px-4">
-        <Link href="/">
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <History className="h-5 w-5 text-primary" />
-        <span className="text-[length:var(--text-base)] font-semibold">업데이트</span>
-      </header>
+    <ScrollArea className="h-full">
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <div className="flex items-center gap-2 mb-8">
+          <History className="h-6 w-6 text-primary" />
+          <h1 className="text-[length:var(--text-2xl)] font-bold">업데이트</h1>
+        </div>
 
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        {releases.length === 0 ? (
+        {loading ? (
+          <div className="space-y-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="pl-6 space-y-2">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-4 w-64" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            ))}
+          </div>
+        ) : releases.length === 0 ? (
           <p className="text-muted-foreground text-[length:var(--text-sm)]">
             릴리스 정보를 불러올 수 없습니다.
           </p>
@@ -97,6 +99,6 @@ export default async function UpdatesPage() {
           </a>
         </div>
       </div>
-    </div>
+    </ScrollArea>
   );
 }
