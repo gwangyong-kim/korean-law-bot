@@ -2,11 +2,41 @@
 Korean Law Chatbot — Chainlit 웹 UI
 
 ChatGPT 스타일의 채팅 인터페이스로 한국 법령/판례를 검색합니다.
+Google OAuth로 회사 계정만 접근 가능합니다.
 """
+
+import os
 
 import chainlit as cl
 
 from bot.gemini_client import ask
+
+# 허용할 회사 이메일 도메인 (환경변수로 설정, 기본값: 모든 Google 계정)
+ALLOWED_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "")
+
+
+@cl.oauth_callback
+def oauth_callback(
+    provider_id: str,
+    token: str,
+    raw_user_data: dict,
+    default_user: cl.User,
+) -> cl.User | None:
+    """Google OAuth 콜백 — 회사 도메인만 허용"""
+    if provider_id != "google":
+        return None
+
+    email = raw_user_data.get("email", "")
+    hd = raw_user_data.get("hd", "")  # Google Workspace 호스트 도메인
+
+    # 회사 도메인 제한이 설정된 경우 체크
+    if ALLOWED_DOMAIN and hd != ALLOWED_DOMAIN:
+        return None
+
+    return cl.User(
+        identifier=email,
+        metadata={"provider": "google", "name": raw_user_data.get("name", "")},
+    )
 
 
 @cl.on_chat_start
