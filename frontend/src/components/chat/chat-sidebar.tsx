@@ -52,7 +52,7 @@ export function ChatSidebar({
   if (olderItems.length) groups.push({ label: "이전", items: olderItems });
 
   return (
-    <div className="flex h-full w-64 flex-col border-r border-border bg-sidebar">
+    <div className="flex h-full w-64 flex-col bg-sidebar shadow-[2px_0_8px_-2px_oklch(0_0_0/0.08)]">
       {/* 헤더 */}
       <div className="flex h-14 items-center justify-between px-4">
         <div className="flex items-center gap-2">
