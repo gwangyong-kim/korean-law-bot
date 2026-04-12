@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, MessageSquare, Trash2, Scale, Search, X, BookOpen } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Scale, Search, X, BookOpen, History } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -128,12 +128,18 @@ export function ChatSidebar({
         )}
       </ScrollArea>
 
-      {/* 도움말 링크 */}
-      <div className="px-3 py-2">
-        <Link href="/help">
-          <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground">
-            <BookOpen className="h-4 w-4" />
-            <span className="text-[length:var(--text-sm)]">도움말</span>
+      {/* 가이드 / 업데이트 링크 */}
+      <div className="px-3 py-1 space-y-0.5">
+        <Link href="/guide">
+          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
+            <BookOpen className="h-3.5 w-3.5" />
+            <span className="text-[length:var(--text-sm)]">사용 가이드</span>
+          </Button>
+        </Link>
+        <Link href="/updates">
+          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
+            <History className="h-3.5 w-3.5" />
+            <span className="text-[length:var(--text-sm)]">업데이트</span>
           </Button>
         </Link>
       </div>
