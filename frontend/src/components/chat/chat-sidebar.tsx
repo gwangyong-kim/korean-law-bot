@@ -1,7 +1,8 @@
 "use client";
 
-import { Plus, MessageSquare, Trash2, Scale } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Scale, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,10 @@ interface ChatSidebarProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  searchOpen?: boolean;
+  onSearchToggle?: () => void;
 }
 
 export function ChatSidebar({
@@ -21,6 +26,10 @@ export function ChatSidebar({
   onSelect,
   onNew,
   onDelete,
+  searchQuery = "",
+  onSearchChange,
+  searchOpen = false,
+  onSearchToggle,
 }: ChatSidebarProps) {
   // 날짜별 그룹핑
   const today = new Date();
@@ -40,10 +49,30 @@ export function ChatSidebar({
   return (
     <div className="flex h-full w-64 flex-col border-r border-border bg-sidebar">
       {/* 헤더 */}
-      <div className="flex h-14 items-center gap-2 px-4">
-        <Scale className="h-5 w-5 text-primary" />
-        <span className="text-[length:var(--text-base)] font-semibold">법령 검색</span>
+      <div className="flex h-14 items-center justify-between px-4">
+        <div className="flex items-center gap-2">
+          <Scale className="h-5 w-5 text-primary" />
+          <span className="text-[length:var(--text-base)] font-semibold">법령 검색</span>
+        </div>
+        {onSearchToggle && (
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onSearchToggle}>
+            {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+          </Button>
+        )}
       </div>
+
+      {/* 검색 바 */}
+      {searchOpen && onSearchChange && (
+        <div className="px-3 pb-2">
+          <Input
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="대화 검색..."
+            className="h-8 text-[length:var(--text-sm)]"
+            autoFocus
+          />
+        </div>
+      )}
 
       {/* 새 대화 버튼 */}
       <div className="px-3 pb-2">
@@ -59,7 +88,7 @@ export function ChatSidebar({
       <ScrollArea className="flex-1 px-2 py-2">
         {groups.length === 0 ? (
           <p className="px-3 py-8 text-center text-[length:var(--text-xs)] text-muted-foreground">
-            대화 기록이 없습니다
+            {searchQuery ? "검색 결과가 없습니다" : "대화 기록이 없습니다"}
           </p>
         ) : (
           groups.map((group) => (
@@ -97,6 +126,15 @@ export function ChatSidebar({
           ))
         )}
       </ScrollArea>
+
+      {/* 단축키 힌트 */}
+      <div className="border-t border-sidebar-border px-3 py-2">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--text-xs)] text-muted-foreground/60">
+          <span>Ctrl+N 새 대화</span>
+          <span>Ctrl+/ 검색</span>
+          <span>Ctrl+B 사이드바</span>
+        </div>
+      </div>
 
       {/* Powered by 푸터 */}
       <div className="border-t border-sidebar-border">

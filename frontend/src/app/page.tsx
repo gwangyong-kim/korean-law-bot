@@ -5,8 +5,9 @@ import { useState, useCallback, useEffect } from "react";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { LogOut, PanelLeftClose, PanelLeft } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeft, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Scale } from "lucide-react";
 import {
@@ -41,6 +42,8 @@ function ChatApp({ userName }: { userName: string }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // 초기 로드 — 대화가 없으면 자동으로 새 대화 생성
   useEffect(() => {
@@ -55,14 +58,45 @@ function ChatApp({ userName }: { userName: string }) {
     }
   }, []);
 
+  // 키보드 단축키
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Ctrl+N: 새 대화
+      if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+        e.preventDefault();
+        handleNew();
+      }
+      // Ctrl+/: 대화 검색 토글
+      if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+      // Ctrl+B: 사이드바 토글
+      if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+        e.preventDefault();
+        setSidebarOpen((prev) => !prev);
+      }
+      // Escape: 검색 닫기
+      if (e.key === "Escape" && searchOpen) {
+        setSearchOpen(false);
+        setSearchQuery("");
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [searchOpen]);
+
   const handleNew = useCallback(() => {
     const conv = createConversation();
     setConversations(getConversations());
     setActiveId(conv.id);
+    // 모바일에서 새 대화 시 사이드바 닫기
+    if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
   const handleSelect = useCallback((id: string) => {
     setActiveId(id);
+    if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
   const handleDelete = useCallback(
@@ -86,19 +120,44 @@ function ChatApp({ userName }: { userName: string }) {
     [activeId]
   );
 
+  // 대화 검색 필터
+  const filteredConversations = searchQuery
+    ? conversations.filter(
+        (c) =>
+          c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.messages.some((m) => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : conversations;
+
   const activeConversation = activeId ? getConversation(activeId) : undefined;
 
   return (
     <div className="flex h-full">
-      {/* 사이드바 */}
+      {/* 사이드바 — 모바일에서 오버레이 */}
       {sidebarOpen && (
-        <ChatSidebar
-          conversations={conversations}
-          activeId={activeId}
-          onSelect={handleSelect}
-          onNew={handleNew}
-          onDelete={handleDelete}
-        />
+        <>
+          {/* 모바일 백드롭 */}
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="fixed inset-y-0 left-0 z-50 md:relative md:z-auto">
+            <ChatSidebar
+              conversations={filteredConversations}
+              activeId={activeId}
+              onSelect={handleSelect}
+              onNew={handleNew}
+              onDelete={handleDelete}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchOpen={searchOpen}
+              onSearchToggle={() => {
+                setSearchOpen(!searchOpen);
+                if (searchOpen) setSearchQuery("");
+              }}
+            />
+          </div>
+        </>
       )}
 
       {/* 메인 영역 */}
@@ -121,12 +180,12 @@ function ChatApp({ userName }: { userName: string }) {
             {!sidebarOpen && (
               <>
                 <Scale className="h-5 w-5 text-primary" />
-                <span className="text-[length:var(--text-base)] font-semibold">법령 검색</span>
+                <span className="text-[length:var(--text-base)] font-semibold hidden sm:inline">법령 검색</span>
               </>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[length:var(--text-xs)] text-muted-foreground">
+            <span className="text-[length:var(--text-xs)] text-muted-foreground hidden sm:inline">
               {userName}
             </span>
             <ThemeToggle />
