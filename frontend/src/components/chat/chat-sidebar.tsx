@@ -160,8 +160,8 @@ export function ChatSidebar({
         </Button>
       </div>
 
-      {/* 단축키 힌트 */}
-      <div className="border-t border-sidebar-border px-3 py-2">
+      {/* 단축키 힌트 + Powered by 푸터 */}
+      <div className="px-3 py-2">
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--text-xs)] text-muted-foreground/60">
           <span>Ctrl+⇧+O 새 대화</span>
           <span>Ctrl+/ 검색</span>
@@ -169,8 +169,7 @@ export function ChatSidebar({
         </div>
       </div>
 
-      {/* Powered by 푸터 */}
-      <div className="border-t border-sidebar-border">
+      <div>
         <div className="flex items-center justify-center gap-1.5 py-3 opacity-70">
           <span className="text-xs text-muted-foreground">Powered by</span>
           <div
