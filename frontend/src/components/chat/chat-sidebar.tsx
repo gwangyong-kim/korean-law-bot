@@ -127,8 +127,8 @@ export function ChatSidebar({
         )}
       </ScrollArea>
 
-      {/* 하단: 가이드 + 업데이트 + 단축키 + Powered by */}
-      <div className="p-3 space-y-1">
+      {/* 하단: 가이드 + 업데이트 */}
+      <div className="px-3 pb-2 space-y-1">
         <Button
           variant="ghost"
           size="sm"
@@ -153,14 +153,17 @@ export function ChatSidebar({
           <History className="h-3.5 w-3.5" />
           <span className="text-[length:var(--text-sm)]">업데이트</span>
         </Button>
+      </div>
 
-        <div className="flex flex-wrap gap-x-3 gap-y-1 px-2 pt-2 text-[length:var(--text-xs)] text-muted-foreground/50">
+      {/* 단축키 + Powered by */}
+      <div className="px-5 pb-4 space-y-3">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--text-xs)] text-muted-foreground/40">
           <span>Ctrl+⇧+O 새 대화</span>
           <span>Ctrl+/ 검색</span>
           <span>Ctrl+B 사이드바</span>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 pt-2 opacity-60">
+        <div className="flex items-center justify-center gap-1.5 opacity-50">
           <span className="text-[length:var(--text-xs)] text-muted-foreground">Powered by</span>
           <div
             className="h-4 w-16 bg-primary"

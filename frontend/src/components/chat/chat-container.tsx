@@ -279,10 +279,10 @@ function EmptyState({ onQuestionClick }: { onQuestionClick: (q: string) => void 
               <button
                 key={q}
                 onClick={() => onQuestionClick(q)}
-                className="flex items-start gap-2 rounded-xl border border-border bg-card p-3 text-left text-[length:var(--text-sm)] text-foreground transition-colors hover:bg-accent/30"
+                className="flex items-center gap-2 rounded-xl border border-border bg-card p-3 text-left text-[length:var(--text-sm)] text-foreground transition-colors hover:bg-accent/30 min-h-[56px]"
               >
-                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span>{q}</span>
+                <FileText className="h-4 w-4 shrink-0 text-primary" />
+                <span className="line-clamp-2">{q}</span>
               </button>
             ))}
           </div>
