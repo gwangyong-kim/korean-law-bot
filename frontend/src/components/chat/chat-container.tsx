@@ -4,7 +4,8 @@ import { useChat } from "@ai-sdk/react";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ChatMessage } from "./chat-message";
 import { ChatInput } from "./chat-input";
-import { Scale, Download, FileText } from "lucide-react";
+import { Scale, Download, FileText, Lightbulb } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import type { Message } from "@/lib/conversations";
@@ -174,8 +175,23 @@ export function ChatContainer({
 }
 
 function EmptyState({ onQuestionClick }: { onQuestionClick: (q: string) => void }) {
+  const [tab, setTab] = useState<"examples" | "guide" | "scope">("examples");
+
+  const TIPS = [
+    { title: "구체적으로 질문하세요", desc: "\"법률 알려줘\"보다 \"근로기준법 제60조 연차휴가 규정\"처럼 구체적으로 물어보면 더 정확합니다." },
+    { title: "이어서 질문하세요", desc: "대화 맥락이 유지되므로 \"위 판례의 전문 보여줘\"처럼 이전 답변을 참조할 수 있습니다." },
+    { title: "계약서를 붙여넣어 보세요", desc: "계약 조항을 붙여넣으면 법적 리스크를 🔴🟡🟢 등급으로 분석해줍니다." },
+    { title: "법률 자문이 아닙니다", desc: "정보 검색 도우미입니다. 중요한 법적 판단은 전문가에게 확인하세요." },
+  ];
+
+  const SCOPES = [
+    "법률 · 시행령 · 시행규칙", "대법원 판례", "헌법재판소 결정",
+    "조세심판원 재결", "행정규칙", "자치법규 · 조례",
+    "행정심판례", "관세청 법령해석", "노동위원회 결정",
+  ];
+
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 py-20">
+    <div className="flex h-full flex-col items-center justify-center gap-6 py-12">
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
         <Scale className="h-8 w-8 text-primary" />
       </div>
@@ -186,18 +202,68 @@ function EmptyState({ onQuestionClick }: { onQuestionClick: (q: string) => void 
         </p>
       </div>
 
-      {/* 클릭 가능한 예시 질문 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full px-4">
-        {EXAMPLE_QUESTIONS.map((q) => (
+      {/* 탭 */}
+      <div className="flex gap-1 rounded-lg bg-muted p-1">
+        {([
+          { key: "examples" as const, label: "예시 질문" },
+          { key: "guide" as const, label: "사용 팁" },
+          { key: "scope" as const, label: "검색 범위" },
+        ]).map((t) => (
           <button
-            key={q}
-            onClick={() => onQuestionClick(q)}
-            className="flex items-start gap-2 rounded-xl border border-border bg-card p-3 text-left text-[length:var(--text-sm)] text-foreground transition-colors hover:bg-accent/30"
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-[length:var(--text-sm)] transition-colors",
+              tab === t.key
+                ? "bg-background text-foreground shadow-sm font-medium"
+                : "text-muted-foreground hover:text-foreground"
+            )}
           >
-            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <span>{q}</span>
+            {t.label}
           </button>
         ))}
+      </div>
+
+      {/* 탭 내용 */}
+      <div className="max-w-lg w-full px-4">
+        {tab === "examples" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {EXAMPLE_QUESTIONS.map((q) => (
+              <button
+                key={q}
+                onClick={() => onQuestionClick(q)}
+                className="flex items-start gap-2 rounded-xl border border-border bg-card p-3 text-left text-[length:var(--text-sm)] text-foreground transition-colors hover:bg-accent/30"
+              >
+                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>{q}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab === "guide" && (
+          <div className="space-y-3">
+            {TIPS.map((tip) => (
+              <div key={tip.title} className="flex gap-3 rounded-xl border border-border bg-card p-4">
+                <Lightbulb className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
+                <div>
+                  <p className="text-[length:var(--text-sm)] font-medium mb-0.5">{tip.title}</p>
+                  <p className="text-[length:var(--text-xs)] text-muted-foreground">{tip.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === "scope" && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {SCOPES.map((item) => (
+              <div key={item} className="rounded-xl border border-border bg-card px-3 py-2.5 text-center text-[length:var(--text-sm)]">
+                {item}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
