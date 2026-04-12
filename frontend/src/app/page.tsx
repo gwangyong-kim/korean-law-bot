@@ -62,7 +62,7 @@ function ChatApp({ userName }: { userName: string }) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // Ctrl+N: 새 대화
-      if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "O") {
         e.preventDefault();
         handleNew();
       }

@@ -130,7 +130,7 @@ export function ChatSidebar({
       {/* 단축키 힌트 */}
       <div className="border-t border-sidebar-border px-3 py-2">
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--text-xs)] text-muted-foreground/60">
-          <span>Ctrl+N 새 대화</span>
+          <span>Ctrl+⇧+O 새 대화</span>
           <span>Ctrl+/ 검색</span>
           <span>Ctrl+B 사이드바</span>
         </div>
