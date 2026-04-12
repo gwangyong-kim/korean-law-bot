@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ChatMessage } from "./chat-message";
-import { ChatInput } from "./chat-input";
+import { ChatInput, type AttachedFile } from "./chat-input";
 import { Scale, Download, FileText, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -70,9 +70,43 @@ export function ChatContainer({
     }
   }, [messages, status, onMessagesChange]);
 
-  function handleSubmit() {
-    if (!input.trim() || isLoading) return;
-    sendMessage({ text: input });
+  async function handleSubmit(attachedFiles?: AttachedFile[]) {
+    if ((!input.trim() && !attachedFiles?.length) || isLoading) return;
+
+    // 텍스트 파일 내용을 메시지에 추가
+    let fullText = input;
+    const imageDataUrls: string[] = [];
+
+    if (attachedFiles?.length) {
+      for (const f of attachedFiles) {
+        if (f.file.type.startsWith("image/")) {
+          // 이미지 → data URL
+          const dataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(f.file);
+          });
+          imageDataUrls.push(dataUrl);
+        } else {
+          // 텍스트/문서 → 메시지에 포함
+          const text = await f.file.text();
+          fullText += `\n\n📎 ${f.file.name}:\n${text}`;
+        }
+      }
+    }
+
+    if (imageDataUrls.length > 0) {
+      sendMessage({
+        text: fullText || "첨부된 이미지를 분석해주세요.",
+        files: imageDataUrls.map((dataUrl) => ({
+          type: "file" as const,
+          mediaType: "image/png",
+          url: dataUrl,
+        })),
+      });
+    } else {
+      sendMessage({ text: fullText });
+    }
     setInput("");
   }
 
