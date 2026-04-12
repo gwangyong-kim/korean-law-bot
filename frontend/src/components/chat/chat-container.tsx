@@ -6,11 +6,25 @@ import { ChatMessage } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import { Scale } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import type { Message } from "@/lib/conversations";
 
-export function ChatContainer() {
-  const { messages, sendMessage, status, error } = useChat();
+interface ChatContainerProps {
+  conversationId: string;
+  initialMessages: Message[];
+  onMessagesChange: (messages: Message[]) => void;
+}
+
+export function ChatContainer({
+  conversationId,
+  initialMessages,
+  onMessagesChange,
+}: ChatContainerProps) {
+  const { messages, sendMessage, status, error } = useChat({
+    id: conversationId,
+  });
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const prevLenRef = useRef(0);
 
   const isLoading = status === "streaming" || status === "submitted";
 
@@ -20,6 +34,23 @@ export function ChatContainer() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // 메시지 변경 시 localStorage에 저장
+  useEffect(() => {
+    if (messages.length === 0) return;
+    if (messages.length === prevLenRef.current && status === "streaming") return;
+    prevLenRef.current = messages.length;
+
+    const mapped: Message[] = messages.map((m) => ({
+      id: m.id,
+      role: m.role as "user" | "assistant",
+      content: getMessageText(m),
+    }));
+
+    if (status !== "streaming") {
+      onMessagesChange(mapped);
+    }
+  }, [messages, status, onMessagesChange]);
 
   function handleSubmit() {
     if (!input.trim() || isLoading) return;
@@ -39,7 +70,7 @@ export function ChatContainer() {
     <div className="flex h-full flex-col">
       {/* 메시지 영역 */}
       <ScrollArea ref={scrollRef} className="flex-1 px-4">
-        {messages.length === 0 ? (
+        {messages.length === 0 && initialMessages.length === 0 ? (
           <EmptyState />
         ) : (
           <div className="mx-auto max-w-3xl py-4">
