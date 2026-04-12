@@ -37,7 +37,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-1 w-64 rounded-xl border border-border bg-popover p-1 shadow-lg">
+        <div className="absolute bottom-full right-0 z-50 mb-1 w-64 rounded-xl border border-border bg-popover p-1 shadow-lg">
           {MODELS.map((model) => (
             <button
               key={model.id}

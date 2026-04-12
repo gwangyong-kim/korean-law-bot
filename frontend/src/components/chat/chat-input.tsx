@@ -15,9 +15,10 @@ interface ChatInputProps {
   onChange: (value: string) => void;
   onSubmit: (files?: AttachedFile[]) => void;
   isLoading: boolean;
+  modelSelector?: React.ReactNode;
 }
 
-export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputProps) {
+export function ChatInput({ value, onChange, onSubmit, isLoading, modelSelector }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<AttachedFile[]>([]);
@@ -117,6 +118,7 @@ export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputPro
           className="min-h-[44px] max-h-[200px] resize-none border-0 bg-transparent p-2 shadow-none focus-visible:ring-0"
           rows={1}
         />
+        {modelSelector}
         <Button
           onClick={handleSubmit}
           disabled={(!value.trim() && files.length === 0) || isLoading}

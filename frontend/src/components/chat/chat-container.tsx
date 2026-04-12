@@ -205,14 +205,12 @@ export function ChatContainer({
       {/* 입력 영역 */}
       <div className="border-t border-border bg-background/80 backdrop-blur-sm p-4">
         <div className="mx-auto max-w-3xl">
-          <div className="mb-2">
-            <ModelSelector value={modelId} onChange={handleModelChange} />
-          </div>
           <ChatInput
             value={input}
             onChange={setInput}
             onSubmit={handleSubmit}
             isLoading={isLoading}
+            modelSelector={<ModelSelector value={modelId} onChange={handleModelChange} />}
           />
           <p className="mt-2 text-center text-[length:var(--text-xs)] text-muted-foreground">
             국가법령정보센터 Open API 기반 · 법률 자문이 아닌 정보 제공 목적
