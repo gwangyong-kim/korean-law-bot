@@ -6,7 +6,9 @@ import { ChatContainer } from "@/components/chat/chat-container";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { GuideView } from "@/components/chat/guide-view";
 import { UpdatesView } from "@/components/chat/updates-view";
+import { ModelSelector } from "@/components/chat/model-selector";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { DEFAULT_MODEL } from "@/lib/models";
 import { LogOut, PanelLeftClose, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,6 +50,7 @@ function ChatApp({ userName }: { userName: string }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("chat");
+  const [modelId, setModelId] = useState(DEFAULT_MODEL);
 
   // 초기 로드
   useEffect(() => {
@@ -197,6 +200,7 @@ function ChatApp({ userName }: { userName: string }) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <ModelSelector value={modelId} onChange={setModelId} />
             <span className="text-[length:var(--text-xs)] text-muted-foreground hidden sm:inline">
               {userName}
             </span>
@@ -218,6 +222,7 @@ function ChatApp({ userName }: { userName: string }) {
               conversationId={activeId}
               initialMessages={activeConversation?.messages || []}
               onMessagesChange={handleMessagesChange}
+              modelId={modelId}
             />
           ) : (
             <div className="flex h-full items-center justify-center">

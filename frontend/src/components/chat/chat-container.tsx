@@ -23,12 +23,14 @@ interface ChatContainerProps {
   conversationId: string;
   initialMessages: Message[];
   onMessagesChange: (messages: Message[]) => void;
+  modelId?: string;
 }
 
 export function ChatContainer({
   conversationId,
   initialMessages,
   onMessagesChange,
+  modelId,
 }: ChatContainerProps) {
   const { messages, sendMessage, status, error } = useChat({
     id: conversationId,
@@ -95,6 +97,8 @@ export function ChatContainer({
       }
     }
 
+    const opts = { body: { modelId } };
+
     if (imageDataUrls.length > 0) {
       sendMessage({
         text: fullText || "첨부된 이미지를 분석해주세요.",
@@ -103,15 +107,15 @@ export function ChatContainer({
           mediaType: "image/png",
           url: dataUrl,
         })),
-      });
+      }, opts);
     } else {
-      sendMessage({ text: fullText });
+      sendMessage({ text: fullText }, opts);
     }
     setInput("");
   }
 
   function handleExampleClick(question: string) {
-    sendMessage({ text: question });
+    sendMessage({ text: question }, { body: { modelId } });
   }
 
   const handleToggleFavorite = useCallback((id: string) => {

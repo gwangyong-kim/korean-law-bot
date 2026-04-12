@@ -31,7 +31,8 @@ function getMcpUrl(): string {
 }
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const { messages, modelId } = await req.json();
+  const selectedModel = modelId || "gemma-4-27b-it";
 
   // korean-law-mcp 서버에 연결하여 모든 도구를 자동으로 가져옴
   const mcpClient = await createMCPClient({
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
     const tools = await mcpClient.tools();
 
     const result = streamText({
-      model: google("gemma-4-27b-it"),
+      model: google(selectedModel),
       system: SYSTEM_PROMPT,
       messages,
       tools,
