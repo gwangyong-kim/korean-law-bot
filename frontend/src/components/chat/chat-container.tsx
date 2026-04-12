@@ -4,6 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ChatMessage } from "./chat-message";
 import { ChatInput, type AttachedFile } from "./chat-input";
+import { ModelSelector } from "./model-selector";
 import { Scale, Download, FileText, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,19 +24,26 @@ interface ChatContainerProps {
   conversationId: string;
   initialMessages: Message[];
   onMessagesChange: (messages: Message[]) => void;
-  modelId?: string;
 }
 
 export function ChatContainer({
   conversationId,
   initialMessages,
   onMessagesChange,
-  modelId,
 }: ChatContainerProps) {
   const { messages, sendMessage, status, error } = useChat({
     id: conversationId,
   });
   const [input, setInput] = useState("");
+  const [modelId, setModelId] = useState(() => {
+    if (typeof window === "undefined") return "gemma-4-27b-it";
+    return localStorage.getItem("law-bot-model") || "gemma-4-27b-it";
+  });
+
+  function handleModelChange(id: string) {
+    setModelId(id);
+    localStorage.setItem("law-bot-model", id);
+  }
   const [favorites, setFavorites] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
     try {
@@ -197,6 +205,9 @@ export function ChatContainer({
       {/* 입력 영역 */}
       <div className="border-t border-border bg-background/80 backdrop-blur-sm p-4">
         <div className="mx-auto max-w-3xl">
+          <div className="mb-2">
+            <ModelSelector value={modelId} onChange={handleModelChange} />
+          </div>
           <ChatInput
             value={input}
             onChange={setInput}
