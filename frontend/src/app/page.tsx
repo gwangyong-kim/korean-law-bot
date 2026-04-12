@@ -65,17 +65,18 @@ function ChatApp({ userName }: { userName: string }) {
   // 키보드 단축키
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "O" || e.key === "o" || e.code === "KeyO")) {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.shiftKey && e.code === "KeyO") {
         e.preventDefault();
         e.stopPropagation();
         handleNew();
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+      if (mod && (e.key === "/" || e.code === "Slash")) {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+      if (mod && e.code === "KeyB") {
         e.preventDefault();
         setSidebarOpen((prev) => !prev);
       }
