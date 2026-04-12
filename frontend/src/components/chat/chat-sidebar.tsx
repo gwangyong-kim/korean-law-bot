@@ -54,7 +54,7 @@ export function ChatSidebar({
     <div className="flex h-full w-64 flex-col bg-sidebar shadow-[2px_0_8px_-2px_oklch(0_0_0/0.08)]">
 
       {/* 상단: 로고 + 새 대화 + 검색 */}
-      <div className="p-3 space-y-2">
+      <div className="p-3 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Scale className="h-5 w-5 text-primary" />
