@@ -272,14 +272,14 @@ function EmptyState({ onQuestionClick }: { onQuestionClick: (q: string) => void 
       </div>
 
       {/* 탭 내용 */}
-      <div className="max-w-lg w-full px-4">
+      <div className="max-w-2xl w-full px-4">
         {tab === "examples" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {EXAMPLE_QUESTIONS.map((q) => (
               <button
                 key={q}
                 onClick={() => onQuestionClick(q)}
-                className="flex items-center gap-2 rounded-xl border border-border bg-card p-4 text-left text-[length:var(--text-sm)] text-foreground transition-colors hover:bg-accent/30 h-[76px]"
+                className="flex items-center gap-2 rounded-xl border border-border bg-card p-4 text-left text-[length:var(--text-sm)] text-foreground transition-colors hover:bg-accent/30"
               >
                 <FileText className="h-4 w-4 shrink-0 text-primary" />
                 <span className="line-clamp-2">{q}</span>
