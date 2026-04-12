@@ -243,7 +243,7 @@ function EmptyState({ onQuestionClick }: { onQuestionClick: (q: string) => void 
         <Scale className="h-8 w-8 text-primary" />
       </div>
       <div className="text-center">
-        <h2 className="text-[length:var(--text-xl)] font-semibold">한국 법령 검색</h2>
+        <h2 className="text-[length:var(--text-xl)] font-semibold">Glluga Statute</h2>
         <p className="mt-1 text-[length:var(--text-sm)] text-muted-foreground">
           법령, 판례, 행정규칙을 자연어로 질문해보세요
         </p>

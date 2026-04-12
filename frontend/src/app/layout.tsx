@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "법령 검색",
-  description: "한국 법령/판례 AI 검색 어시스턴트",
+  title: "Glluga Statute",
+  description: "한국 법령/판례 AI 검색",
 };
 
 export default function RootLayout({

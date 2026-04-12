@@ -56,7 +56,7 @@ export function GuideView() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <Scale className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-[length:var(--text-2xl)] font-bold mb-2">법령 검색 어시스턴트</h1>
+          <h1 className="text-[length:var(--text-2xl)] font-bold mb-2">Glluga Statute</h1>
           <p className="text-[length:var(--text-sm)] text-muted-foreground max-w-md mx-auto">
             한국 법령, 판례, 행정규칙을 자연어로 검색할 수 있습니다.
             어려운 법률 용어도 쉽게 풀어서 설명해드립니다.
