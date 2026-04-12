@@ -29,10 +29,10 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[length:var(--text-sm)] text-muted-foreground hover:bg-muted transition-colors"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1 text-[length:var(--text-sm)] text-muted-foreground hover:bg-muted transition-colors"
       >
-        <Sparkles className="h-3.5 w-3.5" />
-        <span>{current.name}</span>
+        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+        <span className="shrink-0">{current.name}</span>
         <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
       </button>
 
