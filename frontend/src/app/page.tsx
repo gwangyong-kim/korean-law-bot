@@ -235,7 +235,10 @@ function ChatApp({ userName }: { userName: string }) {
 
 function LoginPage() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 p-4">
+    <div className="relative flex h-full flex-col items-center justify-center gap-6 p-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
         <Scale className="h-10 w-10 text-primary" />
       </div>
