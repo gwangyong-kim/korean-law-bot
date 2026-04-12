@@ -65,9 +65,11 @@ function ChatApp({ userName }: { userName: string }) {
   // 키보드 단축키
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "O") {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "O" || e.key === "o" || e.code === "KeyO")) {
         e.preventDefault();
+        e.stopPropagation();
         handleNew();
+        return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "/") {
         e.preventDefault();
@@ -82,8 +84,8 @@ function ChatApp({ userName }: { userName: string }) {
         setSearchQuery("");
       }
     }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
   }, [searchOpen]);
 
   const handleNew = useCallback(() => {
