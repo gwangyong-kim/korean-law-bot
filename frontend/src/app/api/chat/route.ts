@@ -1,13 +1,6 @@
-import { streamText, tool } from "ai";
+import { streamText } from "ai";
 import { google } from "@ai-sdk/google";
-import { z } from "zod";
-
-import {
-  searchLaw,
-  getLawText,
-  searchDecisions,
-  getDecisionText,
-} from "@/lib/law-api";
+import { createMCPClient } from "@ai-sdk/mcp";
 
 const SYSTEM_PROMPT = `당신은 한국 법령 전문 어시스턴트입니다. 법률 비전문가인 사내 직원들이 업무 중 법령을 쉽게 이해할 수 있도록 돕습니다.
 
@@ -29,73 +22,37 @@ const SYSTEM_PROMPT = `당신은 한국 법령 전문 어시스턴트입니다. 
 계약서/규정 검토 요청 시:
 - 붙여넣어진 텍스트에서 법적 리스크를 항목별로 분석하세요.
 - 각 항목에 관련 법령 근거를 명시하세요.
-- 위험도를 🔴높음 🟡보통 🟢낮음으로 표시하세요.
+- 위험도를 🔴높음 🟡보통 🟢낮음으로 표시하세요.`;
 
-도구 사용 흐름:
-- 법령 내용 질문 → search_law로 법령 찾기 → get_law_text로 조문 확인
-- 판례 질문 → search_decisions로 판례 검색 → get_decision_text로 전문 확인
-- 검색 시 target 기본값: 법령은 "law", 판례는 "prec"`;
+function getMcpUrl(): string {
+  const key = process.env.LAW_API_KEY;
+  if (!key) throw new Error("LAW_API_KEY 환경변수가 설정되지 않았습니다.");
+  return `https://korean-law-mcp.fly.dev/sse?oc=${key}`;
+}
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
 
-  const result = streamText({
-    model: google("gemma-4-27b-it"),
-    system: SYSTEM_PROMPT,
-    messages,
-    tools: {
-      search_law: tool({
-        description:
-          "한국 법령을 검색합니다. 법률, 시행령, 시행규칙 등을 키워드로 찾습니다.",
-        inputSchema: z.object({
-          query: z.string().describe("검색 키워드 (법령명 또는 관련 용어)"),
-          target: z
-            .enum(["law", "admrul", "ordin"])
-            .default("law")
-            .describe("검색 대상: law(법령), admrul(행정규칙), ordin(자치법규)"),
-        }),
-        execute: async ({ query, target }) => searchLaw(query, target),
-      }),
-
-      get_law_text: tool({
-        description:
-          "법령의 조문 전문을 조회합니다. search_law 결과에서 얻은 MST(법령일련번호)를 사용합니다.",
-        inputSchema: z.object({
-          mst: z.string().describe("법령 MST 코드 (search_law 결과의 법령일련번호)"),
-          jo: z
-            .string()
-            .optional()
-            .describe("조 번호 (예: '060000'=제60조). 생략하면 전체 조문."),
-        }),
-        execute: async ({ mst, jo }) => getLawText(mst, jo),
-      }),
-
-      search_decisions: tool({
-        description:
-          "판례, 헌법재판소 결정, 조세심판 재결 등 각종 결정례를 검색합니다.",
-        inputSchema: z.object({
-          query: z.string().describe("검색 키워드"),
-          target: z
-            .enum(["prec", "detc", "decc", "expc", "appDcc", "ccDcc", "lcDcc"])
-            .default("prec")
-            .describe("검색 도메인: prec(판례), detc(헌재), decc(조세심판) 등"),
-        }),
-        execute: async ({ query, target }) => searchDecisions(query, target),
-      }),
-
-      get_decision_text: tool({
-        description:
-          "판례 또는 결정의 전문을 조회합니다. search_decisions 결과의 일련번호를 사용합니다.",
-        inputSchema: z.object({
-          target: z
-            .enum(["prec", "detc", "decc", "expc", "appDcc", "ccDcc", "lcDcc"])
-            .describe("도메인 코드"),
-          id: z.string().describe("판례/결정 일련번호"),
-        }),
-        execute: async ({ target, id }) => getDecisionText(target, id),
-      }),
+  // korean-law-mcp 서버에 연결하여 모든 도구를 자동으로 가져옴
+  const mcpClient = await createMCPClient({
+    transport: {
+      type: "sse",
+      url: getMcpUrl(),
     },
   });
 
-  return result.toUIMessageStreamResponse();
+  try {
+    const tools = await mcpClient.tools();
+
+    const result = streamText({
+      model: google("gemma-4-27b-it"),
+      system: SYSTEM_PROMPT,
+      messages,
+      tools,
+    });
+
+    return result.toUIMessageStreamResponse();
+  } finally {
+    await mcpClient.close();
+  }
 }
