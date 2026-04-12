@@ -4,7 +4,6 @@ import { Plus, MessageSquare, Trash2, Scale, Search, X, BookOpen, History } from
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "@/lib/conversations";
 
@@ -53,22 +52,22 @@ export function ChatSidebar({
 
   return (
     <div className="flex h-full w-64 flex-col bg-sidebar shadow-[2px_0_8px_-2px_oklch(0_0_0/0.08)]">
-      {/* 헤더 */}
-      <div className="flex h-14 items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <Scale className="h-5 w-5 text-primary" />
-          <span className="text-[length:var(--text-base)] font-semibold">Glluga 법령 Assistant</span>
-        </div>
-        {onSearchToggle && (
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onSearchToggle}>
-            {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-          </Button>
-        )}
-      </div>
 
-      {/* 검색 바 */}
-      {searchOpen && onSearchChange && (
-        <div className="px-3 pb-2">
+      {/* 상단: 로고 + 새 대화 + 검색 */}
+      <div className="p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Scale className="h-5 w-5 text-primary" />
+            <span className="text-[length:var(--text-base)] font-semibold">Glluga 법령 Assistant</span>
+          </div>
+          {onSearchToggle && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onSearchToggle}>
+              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+            </Button>
+          )}
+        </div>
+
+        {searchOpen && onSearchChange && (
           <Input
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -76,21 +75,16 @@ export function ChatSidebar({
             className="h-8 text-[length:var(--text-sm)]"
             autoFocus
           />
-        </div>
-      )}
+        )}
 
-      {/* 새 대화 버튼 */}
-      <div className="px-3 pb-2">
         <Button onClick={onNew} variant="outline" className="w-full justify-start gap-2">
           <Plus className="h-4 w-4" />
           새 대화
         </Button>
       </div>
 
-      <Separator />
-
-      {/* 대화 목록 */}
-      <ScrollArea className="flex-1 px-2 py-2">
+      {/* 중앙: 대화 목록 (스크롤 영역) */}
+      <ScrollArea className="flex-1 px-2">
         {groups.length === 0 ? (
           <p className="px-3 py-8 text-center text-[length:var(--text-xs)] text-muted-foreground">
             {searchQuery ? "검색 결과가 없습니다" : "대화 기록이 없습니다"}
@@ -132,8 +126,8 @@ export function ChatSidebar({
         )}
       </ScrollArea>
 
-      {/* 가이드 / 업데이트 */}
-      <div className="px-3 py-1 space-y-0.5">
+      {/* 하단: 가이드 + 업데이트 + 단축키 + Powered by */}
+      <div className="p-3 space-y-1">
         <Button
           variant="ghost"
           size="sm"
@@ -158,22 +152,17 @@ export function ChatSidebar({
           <History className="h-3.5 w-3.5" />
           <span className="text-[length:var(--text-sm)]">업데이트</span>
         </Button>
-      </div>
 
-      {/* 단축키 힌트 + Powered by 푸터 */}
-      <div className="px-3 py-2">
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--text-xs)] text-muted-foreground/60">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 px-2 pt-2 text-[length:var(--text-xs)] text-muted-foreground/50">
           <span>Ctrl+⇧+O 새 대화</span>
           <span>Ctrl+/ 검색</span>
           <span>Ctrl+B 사이드바</span>
         </div>
-      </div>
 
-      <div>
-        <div className="flex items-center justify-center gap-1.5 py-3 opacity-70">
-          <span className="text-xs text-muted-foreground">Powered by</span>
+        <div className="flex items-center justify-center gap-1.5 pt-2 opacity-60">
+          <span className="text-[length:var(--text-xs)] text-muted-foreground">Powered by</span>
           <div
-            className="h-5 w-20 bg-primary"
+            className="h-4 w-16 bg-primary"
             style={{
               maskImage: "url(/logo.png)",
               maskSize: "contain",
