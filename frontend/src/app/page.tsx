@@ -42,12 +42,16 @@ function ChatApp({ userName }: { userName: string }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // 초기 로드
+  // 초기 로드 — 대화가 없으면 자동으로 새 대화 생성
   useEffect(() => {
     const all = getConversations();
-    setConversations(all);
     if (all.length > 0) {
+      setConversations(all);
       setActiveId(all[0].id);
+    } else {
+      const conv = createConversation();
+      setConversations([conv]);
+      setActiveId(conv.id);
     }
   }, []);
 
