@@ -97,6 +97,28 @@ export function ChatSidebar({
           ))
         )}
       </ScrollArea>
+
+      {/* Powered by 푸터 */}
+      <div className="border-t border-sidebar-border">
+        <div className="flex items-center justify-center gap-1.5 py-3 opacity-70">
+          <span className="text-xs text-muted-foreground">Powered by</span>
+          <div
+            className="h-5 w-20 bg-primary"
+            style={{
+              maskImage: "url(/logo.png)",
+              maskSize: "contain",
+              maskRepeat: "no-repeat",
+              maskPosition: "left center",
+              WebkitMaskImage: "url(/logo.png)",
+              WebkitMaskSize: "contain",
+              WebkitMaskRepeat: "no-repeat",
+              WebkitMaskPosition: "left center",
+            }}
+            role="img"
+            aria-label="glluga"
+          />
+        </div>
+      </div>
     </div>
   );
 }
