@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import type { Message } from "@/lib/conversations";
 import { extractAssistantText } from "@/lib/ui-message-parts";
 import { MessagePartRenderer } from "./message-part-renderer";
+import { StreamingSkeletonBubble } from "./streaming-skeleton-bubble";
 import { parseChatError, type ParsedError } from "@/lib/error-messages";
 
 const EXAMPLE_QUESTIONS = [
@@ -217,7 +218,7 @@ export function ChatContainer({
               );
             })}
             {isLoading && messages[messages.length - 1]?.role === "user" && (
-              <ChatMessage role="assistant" content="검색 중..." />
+              <StreamingSkeletonBubble />
             )}
             {/*
               Phase 2 RESEARCH Q5 옵션 A: pre-stream 에러 standalone bubble.

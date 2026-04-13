@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useState } from "react";
-import { extractAssistantText } from "@/lib/ui-message-parts";
+import { MessagePartRenderer } from "@/components/chat/message-part-renderer";
 
 export default function TestChat() {
   const { messages, sendMessage, status, error } = useChat();
@@ -17,7 +17,13 @@ export default function TestChat() {
       <div style={{ border: "1px solid #ccc", padding: 10, minHeight: 200, marginBottom: 10 }}>
         {messages.map((m) => (
           <div key={m.id} style={{ marginBottom: 10 }}>
-            <strong>{m.role}:</strong> {extractAssistantText(m)}
+            {/*
+              Phase 3 Plan 03-03: upgrade from plain text to full MessagePartRenderer
+              dispatch. This route is unauthenticated, so it serves as the only local
+              path for eyeballing Phase 3 chip UI without hitting the Google OAuth wall.
+              Will be deleted in Phase 5 CLEAN-04 along with the rest of this file.
+            */}
+            <MessagePartRenderer message={m} />
           </div>
         ))}
         {messages.length === 0 && <p style={{ color: "#999" }}>메시지 없음</p>}
