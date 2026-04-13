@@ -156,10 +156,14 @@ export function ChatContainer({
 
   // 메시지에서 텍스트 추출
   function getMessageText(m: (typeof messages)[number]): string {
-    return m.parts
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("");
+    if (!m.parts || m.parts.length === 0) return "";
+    const texts: string[] = [];
+    for (const p of m.parts) {
+      if ("text" in p && typeof (p as any).text === "string") {
+        texts.push((p as any).text);
+      }
+    }
+    return texts.join("");
   }
 
   return (
