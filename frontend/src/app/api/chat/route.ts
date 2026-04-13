@@ -43,9 +43,30 @@ function getMcpUrl(): string {
   return `https://glluga-law-mcp.fly.dev/mcp?oc=${key}`;
 }
 
+// UIMessage(parts 형식)를 ModelMessage(content 형식)로 변환
+function convertMessages(messages: Array<Record<string, unknown>>) {
+  return messages.map((msg) => {
+    // 이미 content 형식이면 그대로 반환
+    if (msg.content) return msg;
+
+    // parts 형식 → content 형식으로 변환
+    const parts = msg.parts as Array<{ type: string; text?: string }> | undefined;
+    if (parts) {
+      const text = parts
+        .filter((p) => p.type === "text" && p.text)
+        .map((p) => p.text)
+        .join("");
+      return { role: msg.role, content: text };
+    }
+
+    return msg;
+  });
+}
+
 export async function POST(req: Request) {
-  const { messages, modelId } = await req.json();
+  const { messages: rawMessages, modelId } = await req.json();
   const selectedModel = modelId || "gemini-2.0-flash";
+  const messages = convertMessages(rawMessages);
 
   let mcpClient;
   let tools = {};
