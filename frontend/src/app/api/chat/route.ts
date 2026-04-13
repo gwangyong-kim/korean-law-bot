@@ -1,4 +1,4 @@
-import { streamText, convertToModelMessages } from "ai";
+import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { google } from "@ai-sdk/google";
 import { createMCPClient } from "@ai-sdk/mcp";
 
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
   // UIMessage → ModelMessage 변환 (AI SDK 공식 함수)
   const messages = await convertToModelMessages(uiMessages);
 
-  let mcpClient;
+  let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | undefined;
   let tools = {};
 
   // korean-law-mcp 서버 연결 시도
@@ -80,16 +80,54 @@ export async function POST(req: Request) {
     console.error("MCP 연결 실패, 도구 없이 진행:", errMsg);
   }
 
-  try {
-    const result = streamText({
-      model: google(selectedModel),
-      system: SYSTEM_PROMPT,
-      messages,
-      ...(Object.keys(tools).length > 0 ? { tools } : {}),
-    });
+  // Safe MCP close helper — callable from onFinish/onError without
+  // leaking unhandled promise rejections into the serverless worker.
+  const closeMcp = async () => {
+    if (!mcpClient) return;
+    try {
+      await mcpClient.close();
+    } catch (closeErr) {
+      console.error("mcpClient.close() failed:", closeErr);
+    }
+  };
 
-    return result.toUIMessageStreamResponse();
-  } finally {
-    if (mcpClient) await mcpClient.close();
-  }
+  const result = streamText({
+    model: google(selectedModel),
+    system: SYSTEM_PROMPT,
+    messages,
+    stopWhen: stepCountIs(8),
+    ...(Object.keys(tools).length > 0 ? { tools } : {}),
+    onFinish: async ({ finishReason }) => {
+      console.log("[route.ts] streamText finishReason:", finishReason);
+      await closeMcp();
+    },
+    onError: async ({ error }) => {
+      console.error("[route.ts] streamText error:", error);
+      await closeMcp();
+    },
+  });
+
+  return result.toUIMessageStreamResponse({
+    consumeSseStream: async ({ stream }) => {
+      // Drain the tee'd copy so abort/disconnect doesn't deadlock the response.
+      const reader = stream.getReader();
+      try {
+        while (true) {
+          const { done } = await reader.read();
+          if (done) break;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    },
+    onError: (error) => {
+      console.error("[route.ts] toUIMessageStreamResponse error:", error);
+      let msg: string;
+      if (error instanceof Error) msg = error.message;
+      else if (typeof error === "string") msg = error;
+      else msg = "알 수 없는 오류가 발생했습니다.";
+      // Redact LAW_API_KEY query param if it leaked into the error message.
+      return msg.replace(/oc=[^&\s"]+/g, "oc=REDACTED");
+    },
+  });
 }
