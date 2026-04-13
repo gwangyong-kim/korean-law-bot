@@ -76,9 +76,9 @@ Phase 1 이후 서버 에러/타임아웃/재시도 경로를 정비. 같은 `ro
 **Plans:** 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — route.ts MCP 타임아웃 + tools 캐시 + 구조화 에러 JSON + 503 재시도 + SYSTEM_PROMPT 일상 인사 예외 (Wave 1)
-- [ ] 02-02-PLAN.md — error-messages.ts 신설 + ChatMessage 인라인 배너 + MessagePartRenderer pass-through + chat-container 에러 라우팅 (Wave 2)
-- [ ] 02-03-PLAN.md — Vercel UAT (D-04 warm-container PoC, D-13 Gemini smoke, D-14 인사 smoke) + PoC 로그 정리 + PROJECT.md D-12 + VERIFICATION.md 신설 (Wave 3, checkpoint)
+- [x] 02-01-PLAN.md — route.ts MCP 타임아웃 + tools 캐시 + 구조화 에러 JSON + 503 재시도 + SYSTEM_PROMPT 일상 인사 예외 (Wave 1)
+- [x] 02-02-PLAN.md — error-messages.ts 신설 + ChatMessage 인라인 배너 + MessagePartRenderer pass-through + chat-container 에러 라우팅 (Wave 2)
+- [x] 02-03-PLAN.md — Vercel UAT (D-04 warm-container PoC, D-13 Gemini smoke, D-14 인사 smoke) + PoC 로그 정리 + PROJECT.md D-12 + VERIFICATION.md 신설 (Wave 3, checkpoint)
 
 ---
 
