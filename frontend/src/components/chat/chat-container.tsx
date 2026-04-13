@@ -36,8 +36,8 @@ export function ChatContainer({
   });
   const [input, setInput] = useState("");
   const [modelId, setModelId] = useState(() => {
-    if (typeof window === "undefined") return "gemini-2.0-flash";
-    return localStorage.getItem("law-bot-model") || "gemini-2.0-flash";
+    if (typeof window === "undefined") return "gemini-2.5-flash";
+    return localStorage.getItem("law-bot-model") || "gemini-2.5-flash";
   });
 
   function handleModelChange(id: string) {

@@ -13,24 +13,17 @@ export interface ModelInfo {
 
 export const MODELS: ModelInfo[] = [
   {
-    id: "gemma-4-27b-it",
-    name: "Gemma 4 27B",
-    provider: "google",
-    description: "오픈소스, function calling 지원",
-    free: true,
-  },
-  {
-    id: "gemini-2.0-flash",
-    name: "Gemini 2.0 Flash",
-    provider: "google",
-    description: "빠른 응답, 높은 무료 한도",
-    free: true,
-  },
-  {
     id: "gemini-2.5-flash",
     name: "Gemini 2.5 Flash",
     provider: "google",
     description: "최신 모델, 고성능",
+    free: true,
+  },
+  {
+    id: "gemini-2.5-pro",
+    name: "Gemini 2.5 Pro",
+    provider: "google",
+    description: "최고 성능, 복잡한 질문에 적합",
     free: true,
   },
   // 확장 예시 (API 키 설정 시 활성화):
@@ -43,7 +36,7 @@ export const MODELS: ModelInfo[] = [
   // },
 ];
 
-export const DEFAULT_MODEL = "gemma-4-27b-it";
+export const DEFAULT_MODEL = "gemini-2.5-flash";
 
 export function getModelInfo(id: string): ModelInfo | undefined {
   return MODELS.find((m) => m.id === id);

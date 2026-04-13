@@ -67,7 +67,7 @@ function convertMessages(messages: any[]): Array<{ role: string; content: string
 
 export async function POST(req: Request) {
   const { messages: rawMessages, modelId } = await req.json();
-  const selectedModel = modelId || "gemini-2.0-flash";
+  const selectedModel = modelId || "gemini-2.5-flash";
   const messages = convertMessages(rawMessages);
 
   let mcpClient;
