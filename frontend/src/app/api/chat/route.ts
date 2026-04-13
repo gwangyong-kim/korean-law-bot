@@ -172,14 +172,11 @@ async function connectMcpWithRetry(): Promise<{ client: MCPClient; tools: ToolSe
 }
 
 // D-02 + RESEARCH §2.2 pending-promise 캐시 패턴.
-// D-04: cache hit/miss는 임시 log로 관측. 02-03 Task 01에서 제거.
 async function getOrCreateMcp(): Promise<{ client: MCPClient; tools: ToolSet }> {
   const now = Date.now();
   if (cachedClientPromise && now - cachedAt < CACHE_TTL_MS) {
-    console.log("[mcp-cache]", { hit: true, age: now - cachedAt });
     return cachedClientPromise;
   }
-  console.log("[mcp-cache]", { hit: false, age: now - cachedAt });
   cachedAt = now;
   cachedClientPromise = connectMcpWithRetry();
   try {
