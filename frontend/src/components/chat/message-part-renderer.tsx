@@ -5,11 +5,15 @@
  *
  * Phase 1 scope:
  *  - text → render via existing ChatMessage (ReactMarkdown)
- *  - tool-* / dynamic-tool → minimal state chip
+ *  - tool-* / dynamic-tool → ToolInvocationView (Phase 3 upgrade)
  *  - reasoning / file / source-url / source-document / step-start / data-* → null (D-05)
  *  - switch default → dev throw, prod console.error (D-07)
  *
- * Requirements: CHAT-07, CHAT-08
+ * Phase 3 (D-07/D-08/D-09): assistant return JSX renders tool chip stack ABOVE
+ * ChatMessage text bubble as a vertical flex-col (세로 체크리스트, no group box).
+ * chat-message.tsx remains untouched per Option C (RESEARCH §4).
+ *
+ * Requirements: CHAT-07, CHAT-08, TOOL-01, TOOL-03, TOOL-04, TOOL-05
  */
 
 import type {
@@ -17,14 +21,12 @@ import type {
   UIMessagePart,
   UIDataTypes,
   UITools,
-  DynamicToolUIPart,
-  ToolUIPart,
 } from "ai";
 import { ChatMessage } from "./chat-message";
+import { ToolInvocationView } from "./tool-invocation-view";
 import {
   isTextUIPart,
   isToolUIPart,
-  getToolName,
   extractAssistantText,
   type ExtractableMessage,
   type LegacyMessage,
@@ -98,7 +100,7 @@ export function MessagePartRenderer({
     // inside ToolChip which accepts the union type directly.
     if (isToolUIPart(part)) {
       nonTextNodes.push(
-        <ToolChip key={`tool-${idx}`} part={part} />
+        <ToolInvocationView key={`tool-${idx}`} part={part} />
       );
       return;
     }
@@ -132,8 +134,18 @@ export function MessagePartRenderer({
 
   // Phase 2 D-07: textChunks가 비어있어도 error가 있으면 ChatMessage를 렌더해
   // 인라인 에러 배너가 표시될 통로를 보장한다 (partial fail / mid-stream 에러).
+  // Phase 3 D-07: chip 블록을 세로 체크리스트(flex-col)로 스택.
+  // Phase 3 D-08: chip 블록을 ChatMessage 위로 이동해 "[chip1][chip2]\n\n{text}" 레이아웃 달성.
+  // Phase 3 D-09: 그룹 상자 없이 단순 flex-col + gap-1 (번호/bullet/border 없음).
+  // Option C (RESEARCH §4): ChatMessage는 수정하지 않음 — Phase 2의 error/retry props 와
+  // (content || isUser) bubble wrapper 가드가 그대로 작동.
   return (
     <>
+      {nonTextNodes.length > 0 && (
+        <div className="mx-auto max-w-3xl flex flex-col gap-1 pl-11 pt-2">
+          {nonTextNodes}
+        </div>
+      )}
       {(textChunks.length > 0 || error) && (
         <ChatMessage
           id={uiMessage.id}
@@ -146,50 +158,7 @@ export function MessagePartRenderer({
           isRetryDisabled={isRetryDisabled}
         />
       )}
-      {nonTextNodes.length > 0 && (
-        <div className="mx-auto max-w-3xl flex flex-wrap gap-2 pl-11 pb-2">
-          {nonTextNodes}
-        </div>
-      )}
     </>
-  );
-}
-
-/**
- * Minimal tool state chip. Dispatches 4 D-06 states explicitly and a
- * neutral fallback for approval states (Phase 3 scope).
- *
- * Accepts the union of static ToolUIPart and DynamicToolUIPart —
- * both expose `state`, and `getToolName` handles both variants.
- */
-function ToolChip({ part }: { part: ToolUIPart<UITools> | DynamicToolUIPart }) {
-  const name = getToolName(part);
-
-  let label: string;
-  switch (part.state) {
-    case "input-streaming":
-      label = `${name}: 입력 준비 중`;
-      break;
-    case "input-available":
-      label = `${name}: 호출 중`;
-      break;
-    case "output-available":
-      label = `${name}: 완료`;
-      break;
-    case "output-error":
-      label = `${name}: 오류 (${part.errorText ?? "unknown"})`;
-      break;
-    default:
-      // Approval states and any unforeseen state — neutral fallback
-      // per RESEARCH.md §2.3. Not a throw, because these are type-valid.
-      label = `${name}: ${part.state}`;
-      break;
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[length:var(--text-xs)] text-muted-foreground">
-      {label}
-    </span>
   );
 }
 
