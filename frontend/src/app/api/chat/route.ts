@@ -2,6 +2,9 @@ import { streamText } from "ai";
 import { google } from "@ai-sdk/google";
 import { createMCPClient } from "@ai-sdk/mcp";
 
+// Vercel 서버리스 함수 타임아웃 확장 (무료: 최대 60초)
+export const maxDuration = 60;
+
 const SYSTEM_PROMPT = `당신은 한국 법령 전문 어시스턴트입니다. 법률 비전문가인 사내 직원들이 업무 중 법령을 쉽게 이해할 수 있도록 돕습니다.
 
 ━━━ 절대 규칙 (위반 금지) ━━━
