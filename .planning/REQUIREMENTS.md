@@ -12,9 +12,9 @@
 채팅 메시지 렌더링 경로 전반을 AI SDK 6의 공식 `UIMessage.parts` 계약 위에 재구축한다. Phase 1의 핵심.
 
 - [ ] **CHAT-01**: 프로덕션 URL(`frontend-phi-six-16.vercel.app`)에서 법령 관련 질문 ("근로기준법 제60조 연차휴가") 을 던지면, 빈 카드가 아니라 MCP 도구 결과에 근거한 실제 답변 텍스트가 화면에 렌더링된다. (Root cause: `route.ts`)
-- [ ] **CHAT-02**: `frontend/src/app/api/chat/route.ts`에 `stopWhen: stepCountIs(8)`을 명시해서 `stepCountIs(1)` 기본값 종료 문제를 제거한다.
-- [ ] **CHAT-03**: `mcpClient.close()`를 `try/finally`에서 제거하고 `streamText`의 `onFinish` / `onError` 콜백으로 이동시켜 lazy stream race condition을 제거한다.
-- [ ] **CHAT-04**: `toUIMessageStreamResponse()`에 `consumeSseStream` (abort safety) 과 `onError` (에러 마스킹 해제) 콜백을 추가한다.
+- [x] **CHAT-02**: `frontend/src/app/api/chat/route.ts`에 `stopWhen: stepCountIs(8)`을 명시해서 `stepCountIs(1)` 기본값 종료 문제를 제거한다.
+- [x] **CHAT-03**: `mcpClient.close()`를 `try/finally`에서 제거하고 `streamText`의 `onFinish` / `onError` 콜백으로 이동시켜 lazy stream race condition을 제거한다.
+- [x] **CHAT-04**: `toUIMessageStreamResponse()`에 `consumeSseStream` (abort safety) 과 `onError` (에러 마스킹 해제) 콜백을 추가한다.
 - [ ] **CHAT-05**: 새 공용 모듈 `frontend/src/lib/ui-message-parts.ts`를 만들어 공식 type guard (`isTextUIPart`, `isToolUIPart`, `getToolName`)를 재export하고, `extractAssistantText(message: UIMessage)` 를 노출한다.
 - [ ] **CHAT-06**: `chat-container.tsx`의 inline `getMessageText`, `test-sidebar/page.tsx`의 동일 로직을 `extractAssistantText`로 교체하여 단일 진실 원천(single source of truth)을 만든다.
 - [ ] **CHAT-07**: 새 `MessagePartRenderer` 컴포넌트를 만들어 `switch (part.type)` with TypeScript `never`-default로 렌더링한다. v6의 `text`, `dynamic-tool`, `reasoning`, `file`, `source-url`, `step-start` 파트 타입을 모두 분기 처리 (stub 허용).

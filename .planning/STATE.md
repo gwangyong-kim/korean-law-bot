@@ -1,3 +1,17 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: unknown
+last_updated: "2026-04-13T09:03:27.648Z"
+progress:
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 3
+  completed_plans: 1
+  percent: 33
+---
+
 # State
 
 ## Project Reference
@@ -5,7 +19,7 @@
 See: .planning/PROJECT.md (updated 2026-04-13)
 
 **Core value:** 사내 직원이 웹에서 법령을 자연어로 물으면, 답이 빈 카드가 아니라 신뢰할 수 있는 텍스트로 렌더링된다.
-**Current focus:** Phase 1 — Empty Message Bug Fix + Parts Contract
+**Current focus:** Phase 01 — empty-message-bug-fix-parts-contract
 
 ## Current Milestone
 
@@ -16,6 +30,7 @@ v1 — 사내 배포 준비 완료 (~1 week)
 **Phase 1 — Empty Message Bug Fix + Parts Contract** (NOT YET PLANNED)
 
 The production blocker. Two server-side root causes identified by research:
+
 1. `streamText` defaults to `stopWhen: stepCountIs(1)` — terminates after first tool call
 2. `mcpClient.close()` in `try/finally` kills lazy stream mid-consumption
 
