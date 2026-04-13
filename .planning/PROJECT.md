@@ -82,7 +82,9 @@
 | 대화 저장은 localStorage 유지 | 서버 DB 전환은 아키텍처 변경이라 이번 주 스코프 밖 | — Pending |
 | 우선순위: 빈 메시지 버그가 최상단 | 프로덕션 블로커. 이게 안 고쳐지면 다른 작업이 의미 없음 | — Pending |
 | Next.js 16 / AI SDK 6 현행 유지 | 버전 업그레이드는 별도 사이클. 지금은 버그 수정에 집중 | — Pending |
-| 메시지 파트 추출 로직을 **근본 재설계** (패치가 아닌) | 이미 4차례 표면 패치 실패. 원인부터 다시 봐야 함 | — Pending |
+| 메시지 파트 추출 로직을 **근본 재설계** (패치가 아닌) | 이미 4차례 표면 패치 실패. 원인부터 다시 봐야 함 | ✓ Decided (Phase 1) — `lib/ui-message-parts.ts` + `MessagePartRenderer` 단일 경로 |
+| `maxDuration = 60` 유지 (STRE-09 / D-12) | Vercel Hobby 플랜 제약. 평균 Gemini Flash 스트림은 30초 내 완료되고, 타임아웃 시 `stream_timeout` 인라인 에러 UX로 사용자 피드백 확보. 상향(300s)은 Fluid Compute / 유료 플랜 전환 등 별도 인프라 결정. | ✓ Decided (Phase 2) |
+| MCP warm-container 캐시 재사용 (STRE-02 / D-04) | 모듈 스코프 pending-promise 캐시 + TTL 5분. Phase 2 PoC(로컬 dev): `[mcp-cache]` miss → hit × 3 시퀀스가 ~58s / 109s / 164s에 걸쳐 관찰됨 (pending-promise stampede 방어 정상). Vercel 프로덕션 Fluid Compute 토글 확인은 대시보드 접근 불가로 `unknown`. 로컬 warm 재사용은 CONTEXT D-04의 "next dev는 항상 warm" 전제와 일치. | ✓ Decided (Phase 2) — 로컬 관찰됨, 프로덕션 미관찰(비블로킹) |
 
 ## Evolution
 
