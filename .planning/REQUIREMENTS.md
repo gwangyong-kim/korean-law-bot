@@ -15,9 +15,9 @@
 - [x] **CHAT-02**: `frontend/src/app/api/chat/route.ts`에 `stopWhen: stepCountIs(8)`을 명시해서 `stepCountIs(1)` 기본값 종료 문제를 제거한다.
 - [x] **CHAT-03**: `mcpClient.close()`를 `try/finally`에서 제거하고 `streamText`의 `onFinish` / `onError` 콜백으로 이동시켜 lazy stream race condition을 제거한다.
 - [x] **CHAT-04**: `toUIMessageStreamResponse()`에 `consumeSseStream` (abort safety) 과 `onError` (에러 마스킹 해제) 콜백을 추가한다.
-- [ ] **CHAT-05**: 새 공용 모듈 `frontend/src/lib/ui-message-parts.ts`를 만들어 공식 type guard (`isTextUIPart`, `isToolUIPart`, `getToolName`)를 재export하고, `extractAssistantText(message: UIMessage)` 를 노출한다.
+- [x] **CHAT-05**: 새 공용 모듈 `frontend/src/lib/ui-message-parts.ts`를 만들어 공식 type guard (`isTextUIPart`, `isToolUIPart`, `getToolName`)를 재export하고, `extractAssistantText(message: UIMessage)` 를 노출한다.
 - [ ] **CHAT-06**: `chat-container.tsx`의 inline `getMessageText`, `test-sidebar/page.tsx`의 동일 로직을 `extractAssistantText`로 교체하여 단일 진실 원천(single source of truth)을 만든다.
-- [ ] **CHAT-07**: 새 `MessagePartRenderer` 컴포넌트를 만들어 `switch (part.type)` with TypeScript `never`-default로 렌더링한다. v6의 `text`, `dynamic-tool`, `reasoning`, `file`, `source-url`, `step-start` 파트 타입을 모두 분기 처리 (stub 허용).
+- [x] **CHAT-07**: 새 `MessagePartRenderer` 컴포넌트를 만들어 `switch (part.type)` with TypeScript `never`-default로 렌더링한다. v6의 `text`, `dynamic-tool`, `reasoning`, `file`, `source-url`, `step-start` 파트 타입을 모두 분기 처리 (stub 허용).
 - [ ] **CHAT-08**: `ChatContainer`는 parts 렌더링을 직접 하지 않고 `MessagePartRenderer`에 위임하도록 슬림화한다.
 - [ ] **CHAT-09**: Phase 1 수정 전후로 `console.log(JSON.stringify(messages[i].parts))` 로컬 진단 로그를 찍고, 수정 전에는 `tool-*` 파트만, 수정 후에는 `text` 파트가 포함됨을 커밋 메시지 또는 PR 설명에 기록한다.
 
