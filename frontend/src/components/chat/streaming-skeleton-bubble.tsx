@@ -6,7 +6,7 @@
  * avatar + bubble shape so the layout does not shift when the real message
  * replaces it.
  *
- * Replaces the Phase 1 static "검색 중..." placeholder (D-10).
+ * Replaces the Phase 1 static loading placeholder (D-10).
  *
  * D-11: 3-bar skeleton inside a rounded-2xl card, reusing shadcn Skeleton
  * so animate-pulse + bg-muted come from the existing design system.
