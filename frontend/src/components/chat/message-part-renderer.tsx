@@ -29,17 +29,25 @@ import {
   type ExtractableMessage,
   type LegacyMessage,
 } from "@/lib/ui-message-parts";
+import type { ParsedError } from "@/lib/error-messages";
 
 interface MessagePartRendererProps {
   message: ExtractableMessage;
   isFavorite?: boolean;
   onToggleFavorite?: (id: string) => void;
+  // Phase 2 D-07: 마지막 assistant 메시지에만 parent가 전달.
+  error?: ParsedError;
+  onRetry?: () => void;
+  isRetryDisabled?: boolean;
 }
 
 export function MessagePartRenderer({
   message,
   isFavorite,
   onToggleFavorite,
+  error,
+  onRetry,
+  isRetryDisabled,
 }: MessagePartRendererProps) {
   // Legacy path: no parts, render content directly via ChatMessage.
   // extractAssistantText handles both new and legacy shapes uniformly,
@@ -53,6 +61,9 @@ export function MessagePartRenderer({
         content={legacy.content}
         isFavorite={isFavorite}
         onToggleFavorite={onToggleFavorite}
+        error={error}
+        onRetry={onRetry}
+        isRetryDisabled={isRetryDisabled}
       />
     );
   }
@@ -61,6 +72,8 @@ export function MessagePartRenderer({
 
   // User messages in AI SDK 6 always carry their input as text parts.
   // Render them through a single ChatMessage bubble with concatenated text.
+  // user bubble에는 error prop을 의도적으로 pass-through 하지 않음 — chat-container가
+  // isLastAssistant 체크로 standalone bubble을 별도로 렌더한다.
   if (uiMessage.role === "user") {
     return (
       <ChatMessage
@@ -117,15 +130,20 @@ export function MessagePartRenderer({
     }
   });
 
+  // Phase 2 D-07: textChunks가 비어있어도 error가 있으면 ChatMessage를 렌더해
+  // 인라인 에러 배너가 표시될 통로를 보장한다 (partial fail / mid-stream 에러).
   return (
     <>
-      {textChunks.length > 0 && (
+      {(textChunks.length > 0 || error) && (
         <ChatMessage
           id={uiMessage.id}
           role="assistant"
           content={textChunks.join("")}
           isFavorite={isFavorite}
           onToggleFavorite={onToggleFavorite}
+          error={error}
+          onRetry={onRetry}
+          isRetryDisabled={isRetryDisabled}
         />
       )}
       {nonTextNodes.length > 0 && (

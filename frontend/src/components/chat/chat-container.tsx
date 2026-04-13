@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import type { Message } from "@/lib/conversations";
 import { extractAssistantText } from "@/lib/ui-message-parts";
 import { MessagePartRenderer } from "./message-part-renderer";
+import { parseChatError, type ParsedError } from "@/lib/error-messages";
 
 const EXAMPLE_QUESTIONS = [
   "근로기준법 연차휴가 규정 알려줘",
@@ -33,7 +34,7 @@ export function ChatContainer({
   initialMessages,
   onMessagesChange,
 }: ChatContainerProps) {
-  const { messages, sendMessage, status, error } = useChat({
+  const { messages, sendMessage, status, error, regenerate, clearError } = useChat({
     id: conversationId,
   });
   const [input, setInput] = useState("");
@@ -138,6 +139,25 @@ export function ChatContainer({
     });
   }, []);
 
+  // D-09: 실패한 assistant 턴 재생성. Pre-stream 에러 케이스를 대비해
+  // 마지막 메시지 역할을 확인한 뒤 regenerate()와 sendMessage() 중 선택.
+  // (RESEARCH §5.2 Q3: pre-stream에서 regenerate() 동작 불확실 → fallback 필수)
+  const handleRetry = useCallback(async () => {
+    clearError();
+    const last = messages[messages.length - 1];
+    if (last?.role === "assistant") {
+      // Mid-stream 에러: 마지막 assistant 메시지를 regenerate.
+      await regenerate({ body: { modelId } });
+      return;
+    }
+    // Pre-stream 에러: 마지막 user 메시지를 sendMessage로 재전송.
+    if (last?.role === "user") {
+      const text = extractAssistantText(last);
+      if (!text) return;
+      sendMessage({ text }, { body: { modelId } });
+    }
+  }, [clearError, messages, regenerate, sendMessage, modelId]);
+
   function handleExport() {
     const text = messages
       .map((m) => {
@@ -155,6 +175,12 @@ export function ChatContainer({
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  // Phase 2 D-06/D-07: useChat.error를 한국어 ParsedError로 1회 변환.
+  // 마지막 메시지의 role에 따라 인라인(assistant) vs standalone(pre-stream) 분기.
+  const parsedError: ParsedError | undefined = error ? parseChatError(error) : undefined;
+  const lastMessage = messages[messages.length - 1];
+  const lastIsAssistant = lastMessage?.role === "assistant";
 
   return (
     <div className="flex h-full flex-col">
@@ -174,31 +200,39 @@ export function ChatContainer({
           <EmptyState onQuestionClick={handleExampleClick} />
         ) : (
           <div className="mx-auto max-w-3xl py-4">
-            {messages.map((m) => (
-              <MessagePartRenderer
-                key={m.id}
-                message={m}
-                isFavorite={favorites.has(m.id)}
-                onToggleFavorite={handleToggleFavorite}
-              />
-            ))}
+            {messages.map((m, idx) => {
+              const isLast = idx === messages.length - 1;
+              const attachedError =
+                parsedError && isLast && m.role === "assistant" ? parsedError : undefined;
+              return (
+                <MessagePartRenderer
+                  key={m.id}
+                  message={m}
+                  isFavorite={favorites.has(m.id)}
+                  onToggleFavorite={handleToggleFavorite}
+                  error={attachedError}
+                  onRetry={attachedError ? handleRetry : undefined}
+                  isRetryDisabled={isLoading}
+                />
+              );
+            })}
             {isLoading && messages[messages.length - 1]?.role === "user" && (
               <ChatMessage role="assistant" content="검색 중..." />
             )}
-          </div>
-        )}
-        {error && (
-          <div className="mx-auto max-w-3xl px-4 pb-4">
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-              <p className="text-sm font-medium text-destructive mb-1">오류가 발생했습니다</p>
-              <p className="text-sm text-muted-foreground">
-                {error.message?.includes("503") || error.message?.includes("혼잡")
-                  ? "법령 검색 서버가 현재 혼잡합니다. 잠시 후 다시 시도해주세요."
-                  : error.message?.includes("429")
-                  ? "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
-                  : error.message || "알 수 없는 오류가 발생했습니다. 새로고침 후 다시 시도해주세요."}
-              </p>
-            </div>
+            {/*
+              Phase 2 RESEARCH Q5 옵션 A: pre-stream 에러 standalone bubble.
+              마지막 메시지가 user(또는 messages 비어있음)인 상태로 error가 발생했을 때,
+              user bubble 아래에 standalone assistant 에러 bubble을 렌더해 D-07 UX를 유지.
+            */}
+            {parsedError && !lastIsAssistant && (
+              <ChatMessage
+                role="assistant"
+                content=""
+                error={parsedError}
+                onRetry={handleRetry}
+                isRetryDisabled={isLoading}
+              />
+            )}
           </div>
         )}
       </ScrollArea>
