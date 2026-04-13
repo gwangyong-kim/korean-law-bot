@@ -197,7 +197,16 @@ export function ChatContainer({
         )}
         {error && (
           <div className="mx-auto max-w-3xl px-4 pb-4">
-            <p className="text-sm text-destructive">오류: {error.message}</p>
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-sm font-medium text-destructive mb-1">오류가 발생했습니다</p>
+              <p className="text-sm text-muted-foreground">
+                {error.message?.includes("503") || error.message?.includes("혼잡")
+                  ? "법령 검색 서버가 현재 혼잡합니다. 잠시 후 다시 시도해주세요."
+                  : error.message?.includes("429")
+                  ? "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+                  : error.message || "알 수 없는 오류가 발생했습니다. 새로고침 후 다시 시도해주세요."}
+              </p>
+            </div>
           </div>
         )}
       </ScrollArea>

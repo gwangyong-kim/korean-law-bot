@@ -47,26 +47,45 @@ export async function POST(req: Request) {
   const { messages, modelId } = await req.json();
   const selectedModel = modelId || "gemma-4-27b-it";
 
-  // korean-law-mcp 서버에 연결하여 모든 도구를 자동으로 가져옴
-  const mcpClient = await createMCPClient({
-    transport: {
-      type: "http",
-      url: getMcpUrl(),
-    },
-  });
+  let mcpClient;
+  let tools = {};
+
+  // korean-law-mcp 서버 연결 시도
+  try {
+    mcpClient = await createMCPClient({
+      transport: {
+        type: "http",
+        url: getMcpUrl(),
+      },
+    });
+    tools = await mcpClient.tools();
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+
+    // 세션 초과 또는 서버 과부하
+    if (errMsg.includes("503") || errMsg.includes("Max sessions") || errMsg.includes("429")) {
+      return new Response(
+        JSON.stringify({
+          error: "법령 검색 서버가 현재 혼잡합니다. 잠시 후 다시 시도해주세요. (MCP 서버 세션 초과)",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // 기타 MCP 연결 오류 — 도구 없이 AI만 사용
+    console.error("MCP 연결 실패, 도구 없이 진행:", errMsg);
+  }
 
   try {
-    const tools = await mcpClient.tools();
-
     const result = streamText({
       model: google(selectedModel),
       system: SYSTEM_PROMPT,
       messages,
-      tools,
+      ...(Object.keys(tools).length > 0 ? { tools } : {}),
     });
 
     return result.toUIMessageStreamResponse();
   } finally {
-    await mcpClient.close();
+    if (mcpClient) await mcpClient.close();
   }
 }
