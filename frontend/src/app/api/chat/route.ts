@@ -1,8 +1,11 @@
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
+import type { ToolSet } from "ai";
 import { google } from "@ai-sdk/google";
 import { createMCPClient } from "@ai-sdk/mcp";
+import type { MCPClient } from "@ai-sdk/mcp";
 
-// Vercel 서버리스 함수 타임아웃 확장 (무료: 최대 60초)
+// D-12: Vercel serverless 60초 유지. Phase 2 스코프에서는 상향하지 않음.
+// Fluid Compute 활성화 여부와 stream_timeout UX 방어는 02-03 UAT에서 재검증.
 export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `당신은 한국 법령 전문 어시스턴트입니다. 법률 비전문가인 사내 직원들이 업무 중 법령을 쉽게 이해할 수 있도록 돕습니다.
@@ -40,11 +43,153 @@ const SYSTEM_PROMPT = `당신은 한국 법령 전문 어시스턴트입니다. 
 - 일반 상식/설명: 법령 인용 없이 설명만 (출처 불필요)
 - 확인 불가: "⚠️ 이 내용은 도구로 확인하지 못했습니다. 정확한 확인이 필요합니다."`;
 
+// ─────────────────────────────────────────────────────────
+// Phase 2: MCP 모듈 스코프 캐시 (D-02) + pending-promise stampede 방어
+// ─────────────────────────────────────────────────────────
+// RESEARCH §2.2: cache stampede 방지를 위해 클라이언트 자체를 pending Promise
+// 상태로도 저장한다. 동시 요청이 하나의 connect를 await하도록 한다.
+// tool.execute closure가 stale client에 bind되지 않도록 mcpClient 인스턴스도
+// tools와 함께 같은 TTL에 묶어 저장한다 (RESEARCH §2.2 옵션 1).
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let cachedClientPromise: Promise<{ client: MCPClient; tools: ToolSet }> | null = null;
+let cachedAt = 0;
+
+type ErrorCode =
+  | "mcp_timeout"
+  | "mcp_busy"
+  | "mcp_offline"
+  | "stream_timeout"
+  | "unknown";
+
+// ─── 메시지 source-of-truth 규약 ─────────────────────────────
+// Client(frontend/src/lib/error-messages.ts의 KOREAN_MESSAGES)가 사용자에게
+// 렌더되는 canonical 문자열의 유일한 소스다. 서버의 KOREAN_ERROR_MESSAGES는
+// **서버 내부 debug log 용도**로만 사용되며, client parseChatError는 body의
+// `code` 필드만 읽고 `message` 필드는 무시한다 (client 측 KOREAN_MESSAGES로
+// 치환). 두 테이블의 문자열은 drift 허용 — 규약상 client가 항상 이김.
+// 이 주석을 제거하거나 서버/클라이언트 문자열을 동기화하려 하지 말 것.
+// 규약 변경 시 frontend/src/lib/error-messages.ts 상단 주석도 함께 갱신할 것.
+const KOREAN_ERROR_MESSAGES: Record<ErrorCode, string> = {
+  mcp_timeout: "법령 검색 서버 연결이 지연되어 일반 답변만 드립니다.",
+  mcp_busy: "법령 검색 서버가 현재 혼잡합니다. 잠시 후 다시 시도해주세요.",
+  mcp_offline: "법령 검색 서버에 연결할 수 없어 일반 답변만 드릴 수 있습니다.",
+  stream_timeout: "응답 생성 시간이 초과되었습니다. 질문을 더 간단히 해보세요.",
+  unknown: "알 수 없는 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.",
+};
 
 function getMcpUrl(): string {
   const key = process.env.LAW_API_KEY;
   if (!key) throw new Error("LAW_API_KEY 환경변수가 설정되지 않았습니다.");
   return `https://glluga-law-mcp.fly.dev/mcp?oc=${key}`;
+}
+
+// D-11: createMCPClient / tools() throw의 에러 원인을 5개 code 중 하나로 분류.
+function classifyMcpError(err: unknown): ErrorCode {
+  if (!(err instanceof Error)) return "unknown";
+  const msg = err.message ?? "";
+  if (msg.includes("mcp_timeout")) return "mcp_timeout";
+  if (msg.includes("503") || msg.includes("429") || /Max sessions/i.test(msg)) return "mcp_busy";
+  if (msg.includes("ENOTFOUND") || msg.includes("ECONNREFUSED") || msg.includes("fetch failed")) {
+    return "mcp_offline";
+  }
+  if (err.name === "MCPClientError") return "mcp_offline";
+  const cause = (err as { cause?: unknown }).cause;
+  if (cause && typeof cause === "object" && cause !== null && "code" in cause) {
+    const code = (cause as { code: unknown }).code;
+    if (code === "ECONNREFUSED" || code === "ENOTFOUND") return "mcp_offline";
+  }
+  return "unknown";
+}
+
+// stream 도중 발생한 에러를 'stream_timeout' | 'unknown' 중 하나로 분류.
+function classifyStreamError(
+  err: unknown
+): Exclude<ErrorCode, "mcp_timeout" | "mcp_busy" | "mcp_offline"> {
+  if (!(err instanceof Error)) return "unknown";
+  if (err.name === "AbortError" || /aborted/i.test(err.message ?? "")) return "stream_timeout";
+  if (/timeout/i.test(err.message ?? "")) return "stream_timeout";
+  return "unknown";
+}
+
+// pre-stream 에러에 대해 구조화 Response 반환.
+// HTTP status는 관측용 (클라이언트는 body만 사용).
+function makeErrorResponse(code: ErrorCode, status: number): Response {
+  return new Response(
+    JSON.stringify({ error: { code, message: KOREAN_ERROR_MESSAGES[code] } }),
+    { status, headers: { "Content-Type": "application/json" } }
+  );
+}
+
+// D-01: createMCPClient에는 signal/timeout 파라미터가 없다 (RESEARCH §1.1 VERIFIED).
+// Promise.race만이 init 단계에서 타임아웃을 enforce할 수 있는 유일한 수단.
+async function raceWithTimeout(): Promise<MCPClient> {
+  let lateClient: MCPClient | null = null;
+  try {
+    const client = await Promise.race<MCPClient>([
+      createMCPClient({
+        transport: { type: "http", url: getMcpUrl() },
+      }).then((c) => {
+        lateClient = c;
+        return c;
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("mcp_timeout")), 5000)
+      ),
+    ]);
+    return client;
+  } catch (err) {
+    // Best-effort cleanup: race loser가 이후 resolve되면 조용히 close (RESEARCH §1.3).
+    queueMicrotask(() => {
+      void lateClient?.close().catch(() => {});
+    });
+    throw err;
+  }
+}
+
+// D-08: createMCPClient + tools() 조합에서 'mcp_busy'가 감지되면 1초 대기 후 1회 재시도.
+async function connectMcpOnce(): Promise<{ client: MCPClient; tools: ToolSet }> {
+  const client = await raceWithTimeout();
+  try {
+    const tools = (await client.tools()) as ToolSet;
+    return { client, tools };
+  } catch (toolsErr) {
+    // tools() 실패는 우리가 client를 close할 책임을 진다.
+    await client.close().catch(() => {});
+    throw toolsErr;
+  }
+}
+
+async function connectMcpWithRetry(): Promise<{ client: MCPClient; tools: ToolSet }> {
+  try {
+    return await connectMcpOnce();
+  } catch (e) {
+    if (classifyMcpError(e) !== "mcp_busy") throw e;
+    // D-08: 1초 대기 후 1회 retry. 임시 관측 로그.
+    console.log("[route.ts] mcp retry after 1s (503/Max sessions detected)");
+    await new Promise((r) => setTimeout(r, 1000));
+    return await connectMcpOnce();
+  }
+}
+
+// D-02 + RESEARCH §2.2 pending-promise 캐시 패턴.
+// D-04: cache hit/miss는 임시 log로 관측. 02-03 Task 01에서 제거.
+async function getOrCreateMcp(): Promise<{ client: MCPClient; tools: ToolSet }> {
+  const now = Date.now();
+  if (cachedClientPromise && now - cachedAt < CACHE_TTL_MS) {
+    console.log("[mcp-cache]", { hit: true, age: now - cachedAt });
+    return cachedClientPromise;
+  }
+  console.log("[mcp-cache]", { hit: false, age: now - cachedAt });
+  cachedAt = now;
+  cachedClientPromise = connectMcpWithRetry();
+  try {
+    return await cachedClientPromise;
+  } catch (e) {
+    // 실패 시 다음 요청이 재시도 가능하도록 캐시 clear.
+    cachedClientPromise = null;
+    cachedAt = 0;
+    throw e;
+  }
 }
 
 export async function POST(req: Request) {
@@ -54,43 +199,31 @@ export async function POST(req: Request) {
   // UIMessage → ModelMessage 변환 (AI SDK 공식 함수)
   const messages = await convertToModelMessages(uiMessages);
 
-  let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | undefined;
-  let tools = {};
-
-  // korean-law-mcp 서버 연결 시도
+  // D-01/D-02/D-08/D-11: MCP 연결은 모듈 스코프 캐시를 통해.
+  let tools: ToolSet = {};
   try {
-    mcpClient = await createMCPClient({
-      transport: {
-        type: "http",
-        url: getMcpUrl(),
-      },
-    });
-    tools = await mcpClient.tools();
+    const { tools: cachedTools } = await getOrCreateMcp();
+    tools = cachedTools;
   } catch (e) {
+    const code = classifyMcpError(e);
     const errMsg = e instanceof Error ? e.message : String(e);
+    console.error("[route.ts] mcp init failed:", { code, errMsg });
 
-    if (errMsg.includes("503") || errMsg.includes("Max sessions") || errMsg.includes("429")) {
-      return new Response(
-        JSON.stringify({
-          error: "법령 검색 서버가 현재 혼잡합니다. 잠시 후 다시 시도해주세요.",
-        }),
-        { status: 503, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    console.error("MCP 연결 실패, 도구 없이 진행:", errMsg);
+    // D-05: pre-stream 에러는 구조화된 JSON body + HTTP status로 반환.
+    // - mcp_busy    → 503 Service Unavailable
+    // - mcp_timeout → 504 Gateway Timeout
+    // - mcp_offline → 503 Service Unavailable
+    // - unknown     → 500 Internal Server Error
+    if (code === "mcp_busy") return makeErrorResponse("mcp_busy", 503);
+    if (code === "mcp_timeout") return makeErrorResponse("mcp_timeout", 504);
+    if (code === "mcp_offline") return makeErrorResponse("mcp_offline", 503);
+    return makeErrorResponse("unknown", 500);
   }
 
-  // Safe MCP close helper — callable from onFinish/onError without
-  // leaking unhandled promise rejections into the serverless worker.
-  const closeMcp = async () => {
-    if (!mcpClient) return;
-    try {
-      await mcpClient.close();
-    } catch (closeErr) {
-      console.error("mcpClient.close() failed:", closeErr);
-    }
-  };
+  // D-02 확장: mcpClient는 모듈 스코프 캐시가 소유. 요청 단위 close는 하지 않는다.
+  // Phase 1의 closeMcp 패턴(try/catch로 unhandled rejection 방지)은 TTL 만료 시의
+  // future work — 현재는 stale client 문제를 cache TTL 5분 + Vercel worker
+  // 재시작으로만 해결한다 (단일 엔드포인트, 단일 서버 scope).
 
   const result = streamText({
     model: google(selectedModel),
@@ -100,11 +233,13 @@ export async function POST(req: Request) {
     ...(Object.keys(tools).length > 0 ? { tools } : {}),
     onFinish: async ({ finishReason }) => {
       console.log("[route.ts] streamText finishReason:", finishReason);
-      await closeMcp();
     },
     onError: async ({ error }) => {
       console.error("[route.ts] streamText error:", error);
-      await closeMcp();
+      // D-02 확장: stream 에러 시 캐시된 client가 오염되었을 가능성.
+      // 다음 요청이 새로 연결하도록 cache를 clear.
+      cachedClientPromise = null;
+      cachedAt = 0;
     },
   });
 
@@ -123,12 +258,14 @@ export async function POST(req: Request) {
     },
     onError: (error) => {
       console.error("[route.ts] toUIMessageStreamResponse error:", error);
-      let msg: string;
-      if (error instanceof Error) msg = error.message;
-      else if (typeof error === "string") msg = error;
-      else msg = "알 수 없는 오류가 발생했습니다.";
-      // Redact LAW_API_KEY query param if it leaked into the error message.
-      return msg.replace(/oc=[^&\s"]+/g, "oc=REDACTED");
+      // D-05: mid-stream 에러는 JSON-stringified 한 structured error 문자열을
+      // 반환해 client parseChatError()가 pre-stream 경로와 동일하게 파싱한다.
+      const code = classifyStreamError(error);
+      const structured = JSON.stringify({
+        error: { code, message: KOREAN_ERROR_MESSAGES[code] },
+      });
+      // LAW_API_KEY leak 방지 (Phase 1 redaction 유지).
+      return structured.replace(/oc=[^&\s"]+/g, "oc=REDACTED");
     },
   });
 }
