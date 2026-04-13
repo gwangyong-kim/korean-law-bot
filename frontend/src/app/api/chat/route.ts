@@ -44,22 +44,24 @@ function getMcpUrl(): string {
 }
 
 // UIMessage(parts 형식)를 ModelMessage(content 형식)로 변환
-function convertMessages(messages: Array<Record<string, unknown>>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function convertMessages(messages: any[]): Array<{ role: string; content: string }> {
   return messages.map((msg) => {
     // 이미 content 형식이면 그대로 반환
-    if (msg.content) return msg;
-
-    // parts 형식 → content 형식으로 변환
-    const parts = msg.parts as Array<{ type: string; text?: string }> | undefined;
-    if (parts) {
-      const text = parts
-        .filter((p) => p.type === "text" && p.text)
-        .map((p) => p.text)
-        .join("");
-      return { role: msg.role, content: text };
+    if (typeof msg.content === "string") {
+      return { role: msg.role as string, content: msg.content };
     }
 
-    return msg;
+    // parts 형식 → content 형식으로 변환
+    if (Array.isArray(msg.parts)) {
+      const text = msg.parts
+        .filter((p: { type: string; text?: string }) => p.type === "text" && p.text)
+        .map((p: { text: string }) => p.text)
+        .join("");
+      return { role: msg.role as string, content: text };
+    }
+
+    return { role: msg.role as string, content: "" };
   });
 }
 
@@ -101,7 +103,7 @@ export async function POST(req: Request) {
     const result = streamText({
       model: google(selectedModel),
       system: SYSTEM_PROMPT,
-      messages,
+      messages: messages as any,
       ...(Object.keys(tools).length > 0 ? { tools } : {}),
     });
 
