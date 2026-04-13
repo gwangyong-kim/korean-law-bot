@@ -44,15 +44,23 @@ const SYSTEM_PROMPT = `당신은 한국 법령 전문 어시스턴트입니다. 
 - 확인 불가: "⚠️ 이 내용은 도구로 확인하지 못했습니다. 정확한 확인이 필요합니다."`;
 
 // ─────────────────────────────────────────────────────────
-// Phase 2: MCP 모듈 스코프 캐시 (D-02) + pending-promise stampede 방어
+// Phase 2 hotfix v2 (2026-04-14): fresh MCPClient per request.
 // ─────────────────────────────────────────────────────────
-// RESEARCH §2.2: cache stampede 방지를 위해 클라이언트 자체를 pending Promise
-// 상태로도 저장한다. 동시 요청이 하나의 connect를 await하도록 한다.
-// tool.execute closure가 stale client에 bind되지 않도록 mcpClient 인스턴스도
-// tools와 함께 같은 TTL에 묶어 저장한다 (RESEARCH §2.2 옵션 1).
-const CACHE_TTL_MS = 5 * 60 * 1000;
-let cachedClientPromise: Promise<{ client: MCPClient; tools: ToolSet }> | null = null;
-let cachedAt = 0;
+// Original Phase 2 D-02 cached the live MCPClient in module scope for
+// TTL 5min. This was architecturally wrong — caching a live HTTP-backed
+// resource across Vercel warm container invocations caused
+// "Attempted to send a request from a closed client" errors. The
+// underlying HTTP session was idle-closed by Vercel or the MCP server,
+// but the cache still held a stale client reference, so the next request
+// hit a dead connection and returned finishReason="tool-calls" (Phase 1
+// exit criterion regression).
+//
+// Fix: create a fresh MCPClient per request, close it in onFinish/onError.
+// The pending-promise stampede defense is no longer needed — each
+// request's init is independent. Latency cost on warm containers is ~500ms.
+// If concurrency becomes a real concern, a schema-only cache (cache
+// ToolSet as data, rebind execute per request) can be introduced, but
+// for single-user scope that's overkill.
 
 type ErrorCode =
   | "mcp_timeout"
@@ -171,22 +179,10 @@ async function connectMcpWithRetry(): Promise<{ client: MCPClient; tools: ToolSe
   }
 }
 
-// D-02 + RESEARCH §2.2 pending-promise 캐시 패턴.
-async function getOrCreateMcp(): Promise<{ client: MCPClient; tools: ToolSet }> {
-  const now = Date.now();
-  if (cachedClientPromise && now - cachedAt < CACHE_TTL_MS) {
-    return cachedClientPromise;
-  }
-  cachedAt = now;
-  cachedClientPromise = connectMcpWithRetry();
-  try {
-    return await cachedClientPromise;
-  } catch (e) {
-    // 실패 시 다음 요청이 재시도 가능하도록 캐시 clear.
-    cachedClientPromise = null;
-    cachedAt = 0;
-    throw e;
-  }
+// Hotfix v2 (2026-04-14): fresh client per request. No module-scope caching
+// of live resources. See comment block at the top of this file.
+async function connectMcpFresh(): Promise<{ client: MCPClient; tools: ToolSet }> {
+  return connectMcpWithRetry();
 }
 
 export async function POST(req: Request) {
@@ -196,23 +192,23 @@ export async function POST(req: Request) {
   // UIMessage → ModelMessage 변환 (AI SDK 공식 함수)
   const messages = await convertToModelMessages(uiMessages);
 
-  // D-01/D-02/D-08/D-11: MCP 연결은 모듈 스코프 캐시를 통해.
+  // D-01/D-08/D-11 + hotfix v2: fresh MCP client per request.
+  let mcpClient: MCPClient | undefined;
   let tools: ToolSet = {};
   try {
-    const { tools: cachedTools } = await getOrCreateMcp();
+    const fresh = await connectMcpFresh();
+    mcpClient = fresh.client;
     // Gap #1 hotfix (2026-04-14): tools()가 throw 없이 빈 set을 반환하는 경로를
     // 명시적으로 mcp_offline으로 전환한다. 빈 tools로 streamText를 진행하면
     // Gemini가 SYSTEM_PROMPT "절대 규칙"을 위반하면서 hallucinated 답변을 생성
-    // (가짜 [출처: 도구 검색 결과] 태그 포함). 이는 Phase 1이 해결했던 "빈 카드"
+    // (가짜 [출처: 도구 검색 결과] 태그 포함). Phase 1이 해결했던 "빈 카드"
     // 문제가 "가짜 답변"으로 변형되는 케이스이므로 silent degrade를 차단한다.
-    if (Object.keys(cachedTools).length === 0) {
+    if (Object.keys(fresh.tools).length === 0) {
       console.error("[route.ts] MCP returned 0 tools — treating as mcp_offline");
-      // 다음 요청이 다시 init 시도할 수 있도록 cache 무효화.
-      cachedClientPromise = null;
-      cachedAt = 0;
+      await mcpClient.close().catch(() => {});
       return makeErrorResponse("mcp_offline", 503);
     }
-    tools = cachedTools;
+    tools = fresh.tools;
   } catch (e) {
     const code = classifyMcpError(e);
     const errMsg = e instanceof Error ? e.message : String(e);
@@ -229,10 +225,19 @@ export async function POST(req: Request) {
     return makeErrorResponse("unknown", 500);
   }
 
-  // D-02 확장: mcpClient는 모듈 스코프 캐시가 소유. 요청 단위 close는 하지 않는다.
-  // Phase 1의 closeMcp 패턴(try/catch로 unhandled rejection 방지)은 TTL 만료 시의
-  // future work — 현재는 stale client 문제를 cache TTL 5분 + Vercel worker
-  // 재시작으로만 해결한다 (단일 엔드포인트, 단일 서버 scope).
+  // Hotfix v2: client는 요청 단위로 소유한다. Phase 1 패턴 (closeMcp in
+  // onFinish/onError)을 재도입해 요청 끝에 확실히 close한다. Phase 1에서
+  // 문제였던 `mcpClient.close()` in `try/finally`는 stream을 mid-consumption
+  // kill했기 때문 — 여기서는 onFinish/onError 콜백 내부에서 close하므로
+  // stream이 이미 끝난 시점에만 close가 실행되어 안전하다.
+  const safeClose = async () => {
+    if (!mcpClient) return;
+    try {
+      await mcpClient.close();
+    } catch (closeErr) {
+      console.error("[route.ts] mcpClient.close() failed:", closeErr);
+    }
+  };
 
   const result = streamText({
     model: google(selectedModel),
@@ -242,13 +247,11 @@ export async function POST(req: Request) {
     ...(Object.keys(tools).length > 0 ? { tools } : {}),
     onFinish: async ({ finishReason }) => {
       console.log("[route.ts] streamText finishReason:", finishReason);
+      await safeClose();
     },
     onError: async ({ error }) => {
       console.error("[route.ts] streamText error:", error);
-      // D-02 확장: stream 에러 시 캐시된 client가 오염되었을 가능성.
-      // 다음 요청이 새로 연결하도록 cache를 clear.
-      cachedClientPromise = null;
-      cachedAt = 0;
+      await safeClose();
     },
   });
 
