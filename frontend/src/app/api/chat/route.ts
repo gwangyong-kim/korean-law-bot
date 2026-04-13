@@ -40,7 +40,7 @@ const SYSTEM_PROMPT = `당신은 한국 법령 전문 어시스턴트입니다. 
 function getMcpUrl(): string {
   const key = process.env.LAW_API_KEY;
   if (!key) throw new Error("LAW_API_KEY 환경변수가 설정되지 않았습니다.");
-  return `https://korean-law-mcp.fly.dev/mcp?oc=${key}`;
+  return `https://glluga-law-mcp.fly.dev/mcp?oc=${key}`;
 }
 
 export async function POST(req: Request) {
