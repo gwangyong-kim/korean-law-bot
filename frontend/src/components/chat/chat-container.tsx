@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import type { Message } from "@/lib/conversations";
+import { extractAssistantText } from "@/lib/ui-message-parts";
+import { MessagePartRenderer } from "./message-part-renderer";
 
 const EXAMPLE_QUESTIONS = [
   "근로기준법 연차휴가 규정 알려줘",
@@ -72,7 +74,7 @@ export function ChatContainer({
     const mapped: Message[] = messages.map((m) => ({
       id: m.id,
       role: m.role as "user" | "assistant",
-      content: getMessageText(m),
+      content: extractAssistantText(m),
     }));
 
     if (status !== "streaming") {
@@ -140,7 +142,7 @@ export function ChatContainer({
     const text = messages
       .map((m) => {
         const role = m.role === "user" ? "👤 질문" : "⚖️ 답변";
-        return `${role}\n${getMessageText(m)}`;
+        return `${role}\n${extractAssistantText(m)}`;
       })
       .join("\n\n" + "─".repeat(40) + "\n\n");
 
@@ -152,18 +154,6 @@ export function ChatContainer({
     a.download = `법령검색_${new Date().toISOString().slice(0, 10)}.txt`;
     a.click();
     URL.revokeObjectURL(url);
-  }
-
-  // 메시지에서 텍스트 추출
-  function getMessageText(m: (typeof messages)[number]): string {
-    if (!m.parts || m.parts.length === 0) return "";
-    const texts: string[] = [];
-    for (const p of m.parts) {
-      if ("text" in p && typeof (p as any).text === "string") {
-        texts.push((p as any).text);
-      }
-    }
-    return texts.join("");
   }
 
   return (
@@ -185,11 +175,9 @@ export function ChatContainer({
         ) : (
           <div className="mx-auto max-w-3xl py-4">
             {messages.map((m) => (
-              <ChatMessage
+              <MessagePartRenderer
                 key={m.id}
-                id={m.id}
-                role={m.role as "user" | "assistant"}
-                content={getMessageText(m)}
+                message={m}
                 isFavorite={favorites.has(m.id)}
                 onToggleFavorite={handleToggleFavorite}
               />

@@ -2,17 +2,11 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useState } from "react";
+import { extractAssistantText } from "@/lib/ui-message-parts";
 
 export default function TestChat() {
   const { messages, sendMessage, status, error } = useChat();
   const [input, setInput] = useState("");
-
-  function getMessageText(m: (typeof messages)[number]): string {
-    return m.parts
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("");
-  }
 
   return (
     <div style={{ padding: 20, fontFamily: "sans-serif" }}>
@@ -23,7 +17,7 @@ export default function TestChat() {
       <div style={{ border: "1px solid #ccc", padding: 10, minHeight: 200, marginBottom: 10 }}>
         {messages.map((m) => (
           <div key={m.id} style={{ marginBottom: 10 }}>
-            <strong>{m.role}:</strong> {getMessageText(m)}
+            <strong>{m.role}:</strong> {extractAssistantText(m)}
           </div>
         ))}
         {messages.length === 0 && <p style={{ color: "#999" }}>메시지 없음</p>}
