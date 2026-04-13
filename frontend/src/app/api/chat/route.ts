@@ -1,4 +1,4 @@
-import { streamText } from "ai";
+import { streamText, convertToModelMessages } from "ai";
 import { google } from "@ai-sdk/google";
 import { createMCPClient } from "@ai-sdk/mcp";
 
@@ -46,32 +46,12 @@ function getMcpUrl(): string {
   return `https://glluga-law-mcp.fly.dev/mcp?oc=${key}`;
 }
 
-// UIMessage(parts 형식)를 ModelMessage(content 형식)로 변환
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function convertMessages(messages: any[]): Array<{ role: string; content: string }> {
-  return messages.map((msg) => {
-    // 이미 content 형식이면 그대로 반환
-    if (typeof msg.content === "string") {
-      return { role: msg.role as string, content: msg.content };
-    }
-
-    // parts 형식 → content 형식으로 변환
-    if (Array.isArray(msg.parts)) {
-      const text = msg.parts
-        .filter((p: { type: string; text?: string }) => p.type === "text" && p.text)
-        .map((p: { text: string }) => p.text)
-        .join("");
-      return { role: msg.role as string, content: text };
-    }
-
-    return { role: msg.role as string, content: "" };
-  });
-}
-
 export async function POST(req: Request) {
-  const { messages: rawMessages, modelId } = await req.json();
+  const { messages: uiMessages, modelId } = await req.json();
   const selectedModel = modelId || "gemini-2.5-flash";
-  const messages = convertMessages(rawMessages);
+
+  // UIMessage → ModelMessage 변환 (AI SDK 공식 함수)
+  const messages = await convertToModelMessages(uiMessages);
 
   let mcpClient;
   let tools = {};
@@ -88,17 +68,15 @@ export async function POST(req: Request) {
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : String(e);
 
-    // 세션 초과 또는 서버 과부하
     if (errMsg.includes("503") || errMsg.includes("Max sessions") || errMsg.includes("429")) {
       return new Response(
         JSON.stringify({
-          error: "법령 검색 서버가 현재 혼잡합니다. 잠시 후 다시 시도해주세요. (MCP 서버 세션 초과)",
+          error: "법령 검색 서버가 현재 혼잡합니다. 잠시 후 다시 시도해주세요.",
         }),
         { status: 503, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // 기타 MCP 연결 오류 — 도구 없이 AI만 사용
     console.error("MCP 연결 실패, 도구 없이 진행:", errMsg);
   }
 
@@ -106,7 +84,7 @@ export async function POST(req: Request) {
     const result = streamText({
       model: google(selectedModel),
       system: SYSTEM_PROMPT,
-      messages: messages as any,
+      messages,
       ...(Object.keys(tools).length > 0 ? { tools } : {}),
     });
 
