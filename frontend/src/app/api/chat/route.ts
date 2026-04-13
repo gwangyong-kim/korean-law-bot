@@ -200,6 +200,18 @@ export async function POST(req: Request) {
   let tools: ToolSet = {};
   try {
     const { tools: cachedTools } = await getOrCreateMcp();
+    // Gap #1 hotfix (2026-04-14): tools()가 throw 없이 빈 set을 반환하는 경로를
+    // 명시적으로 mcp_offline으로 전환한다. 빈 tools로 streamText를 진행하면
+    // Gemini가 SYSTEM_PROMPT "절대 규칙"을 위반하면서 hallucinated 답변을 생성
+    // (가짜 [출처: 도구 검색 결과] 태그 포함). 이는 Phase 1이 해결했던 "빈 카드"
+    // 문제가 "가짜 답변"으로 변형되는 케이스이므로 silent degrade를 차단한다.
+    if (Object.keys(cachedTools).length === 0) {
+      console.error("[route.ts] MCP returned 0 tools — treating as mcp_offline");
+      // 다음 요청이 다시 init 시도할 수 있도록 cache 무효화.
+      cachedClientPromise = null;
+      cachedAt = 0;
+      return makeErrorResponse("mcp_offline", 503);
+    }
     tools = cachedTools;
   } catch (e) {
     const code = classifyMcpError(e);
