@@ -59,7 +59,7 @@ function isLegacyMessage(msg: unknown): msg is LegacyMessage {
  * - Unknown shape: logs a warning and returns "" (D-03 fallback).
  *
  * Single source of truth — replaces the duplicate inline getMessageText
- * helpers in chat-container.tsx and test-sidebar/page.tsx (CHAT-06).
+ * helpers that previously lived in chat-container.tsx (CHAT-06).
  */
 export function extractAssistantText(msg: ExtractableMessage): string {
   // Legacy branch (COMPAT-01, COMPAT-02): handle old localStorage shape.

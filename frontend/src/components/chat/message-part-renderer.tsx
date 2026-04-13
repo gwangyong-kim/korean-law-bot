@@ -164,7 +164,7 @@ export function MessagePartRenderer({
 
 /**
  * Type-exhaustive safety net (D-07). Triggers at the switch default:
- *  - dev: throw (so the test-sidebar surfaces the gap immediately)
+ *  - dev: throw (so the gap surfaces immediately during development)
  *  - prod: console.error (so production never crashes on an unknown part)
  */
 function assertNever(
