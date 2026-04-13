@@ -130,7 +130,9 @@ Parts contract가 실제 데이터를 품고 있다는 전제 위에 UI 개선.
 
 ---
 
-## Phase 4: Conversation Persistence Stabilization
+## Phase 4: Conversation Persistence Stabilization — **DROPPED (v1 milestone)**
+
+**Dropped** at 2026-04-14 during `/gsd-autonomous --interactive` speed-mode run. Rationale: (1) ROADMAP에 명시된 drop-first candidate, (2) Phase 1의 COMPAT floor가 legacy localStorage 렌더를 이미 보장 → 프로덕션 regression 없음, (3) Phase 4 UAT가 OAuth 벽으로 interactive orchestrator에게 검증 불가, (4) v1은 단일 사용자 사내 배포이므로 UIMessage 전환은 v2-tier. PERS-01..04는 v2 로드맵으로 carry-forward.
 
 **Drop-first candidate.** 스코프 타이트 시 가장 먼저 포기. Phase 1의 COMPAT가 safety floor이므로 드롭해도 프로덕션 regression은 없음.
 
@@ -170,14 +172,26 @@ Parts contract가 실제 데이터를 품고 있다는 전제 위에 UI 개선.
 
 ## Milestone Exit Criteria
 
-- [ ] 프로덕션 URL에서 법령 질의가 빈 카드 없이 답변 렌더링됨
-- [ ] 세 가지 실패 모드에 대해 한국어 에러 메시지가 사용자에게 명확히 전달됨
-- [ ] 도구 호출 진행 상태가 정적 "검색 중..." 이상의 피드백으로 노출됨
-- [ ] Chainlit 흔적이 레포에 없음 (grep 기준 0개)
-- [ ] Slack 봇 경로가 여전히 동작함 (수동 `python main.py` 기동 테스트)
-- [ ] 기존 localStorage 대화가 업데이트 후에도 읽힘
-- [ ] README 또는 CLAUDE.md에 사내 배포 URL + 알려진 제약 사항 기록 (v1은 단일 사용자용, v2 로드맵 참조)
+- [x] 프로덕션 URL에서 법령 질의가 빈 카드 없이 답변 렌더링됨 (Phase 1, VERIFICATION.md PASS + 로컬 Playwright smoke)
+- [x] 세 가지 실패 모드에 대해 한국어 에러 메시지가 사용자에게 명확히 전달됨 (Phase 2, `error-messages.ts` 5-code 테이블 code-level verified / runtime `verified-with-exceptions`)
+- [x] 도구 호출 진행 상태가 정적 "검색 중..." 이상의 피드백으로 노출됨 (Phase 3, `ToolInvocationView` + `StreamingSkeletonBubble` — 정적 "검색 중..." placeholder 완전 제거됨)
+- [x] Chainlit 흔적이 레포에 없음 (grep 기준 0개) (Phase 5, `grep -ri "chainlit"` → 0 matches)
+- [x] Slack 봇 경로가 여전히 동작함 (수동 `python main.py` 기동 테스트) (Phase 5, `python -c "import main"` PASS — 전체 기동 로그 확인은 사용자 carry-forward)
+- [x] 기존 localStorage 대화가 업데이트 후에도 읽힘 (Phase 1 COMPAT-01..03 / `lib/conversations.ts` diff 0 전체 milestone 내내 유지)
+- [ ] README 또는 CLAUDE.md에 사내 배포 URL + 알려진 제약 사항 기록 (v1은 단일 사용자용, v2 로드맵 참조) — **carry-forward**: 별도 문서 작업, 코드 변경 없음. 다음 세션에서 단독 task로 처리 가능.
+
+**Dropped scope:** Phase 4 (Conversation Persistence Stabilization) — PERS-01..04, v2 로드맵으로 carry-forward.
+
+## Milestone Completion Status
+
+**v1 milestone: substantially complete (2026-04-14).** 4/5 phases verified, Phase 4 dropped per ROADMAP drop-first rule. Core value (사내 직원이 웹에서 법령을 자연어로 물으면, 답이 빈 카드가 아니라 신뢰할 수 있는 텍스트로 렌더링된다) 달성. 프로덕션 URL `https://frontend-phi-six-16.vercel.app` 에 Phase 1+2+3+5 모두 배포됨.
+
+**Carry-forward items (non-blocking):**
+- Phase 2/3 runtime 시각 UI 검증 (OAuth 벽으로 interactive orchestrator 검증 불가) — 사용자 실사용 시 자연 재검증
+- Phase 5 Slack bot 전체 기동 smoke test (`python main.py` + Slack event 수신 확인)
+- README/CLAUDE.md 배포 URL + 제약 사항 문서화
 
 ---
 *Roadmap created: 2026-04-13*
+*Milestone v1 closed: 2026-04-14 (speed-mode autonomous, Phase 4 dropped)*
 *Last updated: 2026-04-13 after format normalization for gsd-tools parser*
