@@ -4,7 +4,8 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Scale, User, Copy, Check, Star } from "lucide-react";
+import { Scale, User, Copy, Check, Star, RotateCcw } from "lucide-react";
+import type { ParsedError } from "@/lib/error-messages";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -12,9 +13,22 @@ interface ChatMessageProps {
   id?: string;
   isFavorite?: boolean;
   onToggleFavorite?: (id: string) => void;
+  // Phase 2 D-07: 인라인 에러 배너 + 재시도 버튼
+  error?: ParsedError;
+  onRetry?: () => void;
+  isRetryDisabled?: boolean;
 }
 
-export function ChatMessage({ role, content, id, isFavorite, onToggleFavorite }: ChatMessageProps) {
+export function ChatMessage({
+  role,
+  content,
+  id,
+  isFavorite,
+  onToggleFavorite,
+  error,
+  onRetry,
+  isRetryDisabled,
+}: ChatMessageProps) {
   const isUser = role === "user";
   const [copied, setCopied] = useState(false);
 
@@ -38,22 +52,55 @@ export function ChatMessage({ role, content, id, isFavorite, onToggleFavorite }:
 
       {/* 메시지 */}
       <div className="flex max-w-[75%] flex-col gap-1">
-        <div
-          className={cn(
-            "rounded-2xl px-4 py-3 text-[length:var(--text-base)]",
-            isUser
-              ? "bg-primary text-primary-foreground"
-              : "bg-card border border-border"
-          )}
-        >
-          {isUser ? (
-            <p className="whitespace-pre-wrap">{content}</p>
-          ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-            </div>
-          )}
-        </div>
+        {/*
+          Phase 2 D-07 Part D: bubble wrapper 조건부 렌더.
+          - 사용자 메시지는 항상 보임
+          - 봇 메시지는 content가 있을 때만 bubble 렌더 (pre-stream 에러로 content가 빈 경우
+            빈 말풍선 + 에러 배너가 나란히 나타나는 UX 깨짐 방지)
+          - "검색 중..."은 truthy이므로 로딩 플레이스홀더는 그대로 보임
+        */}
+        {(content || isUser) && (
+          <div
+            className={cn(
+              "rounded-2xl px-4 py-3 text-[length:var(--text-base)]",
+              isUser
+                ? "bg-primary text-primary-foreground"
+                : "bg-card border border-border"
+            )}
+          >
+            {isUser ? (
+              <p className="whitespace-pre-wrap">{content}</p>
+            ) : (
+              <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Phase 2 D-07: 인라인 에러 배너 — 실패한 assistant bubble 내부에 rendered */}
+        {!isUser && error && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 flex flex-col gap-2">
+            <p className="text-[length:var(--text-sm)] text-destructive font-medium">
+              {error.message}
+            </p>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                disabled={isRetryDisabled}
+                className={cn(
+                  "inline-flex items-center gap-1.5 self-start rounded-md border border-border bg-background px-3 py-1.5 text-[length:var(--text-xs)] font-medium",
+                  "hover:bg-muted transition-colors",
+                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+              >
+                <RotateCcw className="h-3 w-3" />
+                다시 시도
+              </button>
+            )}
+          </div>
+        )}
 
         {/* 액션 버튼 (봇 메시지에만) */}
         {!isUser && content && content !== "검색 중..." && (
