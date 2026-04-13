@@ -45,7 +45,7 @@ function getMcpUrl(): string {
 
 export async function POST(req: Request) {
   const { messages, modelId } = await req.json();
-  const selectedModel = modelId || "gemma-4-27b-it";
+  const selectedModel = modelId || "gemini-2.0-flash";
 
   let mcpClient;
   let tools = {};
