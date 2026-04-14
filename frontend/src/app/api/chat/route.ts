@@ -8,6 +8,7 @@ import type { MCPClient } from "@ai-sdk/mcp";
 import { getModelInfo } from "@/lib/models";
 import {
   incrementBilling,
+  maybeFlushPreviousHour,
   postSlackMessage,
   formatKrw,
 } from "@/lib/billing-store";
@@ -30,37 +31,36 @@ export const MODEL_PRICING: Record<string, { inPerM: number; outPerM: number }> 
   "gemini-2.0-flash": { inPerM: 0.1, outPerM: 0.4 },
 };
 
-// 2026-04-15: 요청별 알림(즉시) + Redis 누적 + 월간 임계값 알림($1/$3/$5/$10
-// /$20/$50/$100)까지 한 함수에서 처리한다. 실패는 조용히 삼킨다 — 사용자
-// 응답을 블로킹하거나 에러를 유발해선 안 된다.
-//
-// 필요한 Slack 권한: `chat:write` (대상 채널에 봇이 초대되어 있어야 함)
-// SLACK_BILLING_CHANNEL은 채널 ID (예: C0123ABC) 또는 "#채널명" 둘 다 허용.
+// 2026-04-15: per-request Slack 알림은 제거 (시끄러워서). Redis에 시간/일/월
+// 단위로 누적하고, Slack 알림은 (a) flush-on-next-request 업무시간 시간별
+// digest (b) daily digest 크론 (c) 월간 임계값 교차 시 1회만 발송.
+// 실패는 조용히 삼킨다.
 async function notifyBilling(
   modelId: string,
   inputTokens: number,
   outputTokens: number
 ): Promise<void> {
   const price = MODEL_PRICING[modelId];
-  if (!price) return; // 무료 모델 또는 가격 미등록 모델은 알림 생략
-  const cost =
-    (inputTokens / 1_000_000) * price.inPerM +
-    (outputTokens / 1_000_000) * price.outPerM;
-  const krwStr = formatKrw(cost);
 
-  // (1) 요청별 즉시 알림
-  const text = `💰 ${modelId} · 입력 ${inputTokens.toLocaleString()} · 출력 ${outputTokens.toLocaleString()} 토큰 · *$${cost.toFixed(6)}* (${krwStr})`;
-  await postSlackMessage(text);
+  if (price) {
+    const cost =
+      (inputTokens / 1_000_000) * price.inPerM +
+      (outputTokens / 1_000_000) * price.outPerM;
 
-  // (2) Redis 누적 + 월간 임계값 체크
-  const result = await incrementBilling(inputTokens, outputTokens, cost);
-  if (result?.crossedThresholdUsd != null) {
-    const thresholdKrw = formatKrw(result.crossedThresholdUsd);
-    const monthlyKrw = formatKrw(result.monthlyCostUsd);
-    await postSlackMessage(
-      `🚨 *이번 달 사용량이 $${result.crossedThresholdUsd} (${thresholdKrw})를 넘었습니다* · 누적 $${result.monthlyCostUsd.toFixed(4)} (${monthlyKrw})`
-    );
+    // Redis 누적 + 월간 임계값 체크
+    const result = await incrementBilling(inputTokens, outputTokens, cost);
+    if (result?.crossedThresholdUsd != null) {
+      const thresholdKrw = formatKrw(result.crossedThresholdUsd);
+      const monthlyKrw = formatKrw(result.monthlyCostUsd);
+      await postSlackMessage(
+        `🚨 *이번 달 사용량이 $${result.crossedThresholdUsd} (${thresholdKrw})를 넘었습니다* · 누적 $${result.monthlyCostUsd.toFixed(4)} (${monthlyKrw})`
+      );
+    }
   }
+
+  // 무료 모델 요청이든 paid든 관계없이 "이전 시간 업무시간 bucket을 아직
+  // flush 안 했으면 지금 flush"를 시도한다. SETNX 잠금으로 중복 방지.
+  await maybeFlushPreviousHour();
 }
 
 // 2026-04-14: multi-provider dispatch driven by MODELS registry (models.ts).
