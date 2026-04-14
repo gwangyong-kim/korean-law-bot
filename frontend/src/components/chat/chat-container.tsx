@@ -60,10 +60,16 @@ export function ChatContainer({
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // 새 메시지 시 하단 스크롤
+  // 새 메시지 시 하단 스크롤.
+  // Base UI ScrollArea는 Root를 forwardRef 대상으로 넘기고, 실제 scrollable
+  // 요소는 내부의 Viewport(data-slot="scroll-area-viewport")다. Root의
+  // scrollTop을 건드리면 아무 효과가 없다 — Viewport를 직접 찾아서 scroll.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const viewport = scrollRef.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]',
+    );
+    if (viewport) {
+      viewport.scrollTop = viewport.scrollHeight;
     }
   }, [messages]);
 
@@ -195,8 +201,11 @@ export function ChatContainer({
         </div>
       )}
 
-      {/* 메시지 영역 */}
-      <ScrollArea ref={scrollRef} className="flex-1 px-4">
+      {/* 메시지 영역. min-h-0는 flex column 자식이 content로 인해 늘어나지
+          않고 flex-basis:0에서 shrink하도록 허용 — 없으면 Viewport의
+          overflow:scroll이 절대 발동하지 않아 답변이 길어지면 입력창이 화면
+          밖으로 밀려나고 스크롤도 안 된다. */}
+      <ScrollArea ref={scrollRef} className="flex-1 min-h-0 px-4">
         {messages.length === 0 && initialMessages.length === 0 ? (
           <EmptyState onQuestionClick={handleExampleClick} />
         ) : (

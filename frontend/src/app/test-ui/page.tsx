@@ -20,6 +20,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { MessagePartRenderer } from "@/components/chat/message-part-renderer";
 import { StreamingSkeletonBubble } from "@/components/chat/streaming-skeleton-bubble";
 import { ChatMessage } from "@/components/chat/chat-message";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { parseChatError, type ParsedError } from "@/lib/error-messages";
 import { extractAssistantText } from "@/lib/ui-message-parts";
 
@@ -30,9 +31,15 @@ export default function TestUIPage() {
 
   const isLoading = status === "streaming" || status === "submitted";
 
+  // ChatContainer와 동일한 스크롤 fix — Base UI ScrollArea Root의 ref는
+  // scrollable 요소가 아니다. data-slot="scroll-area-viewport"로 실제
+  // viewport를 찾아서 scrollTop을 세팅해야 auto-scroll이 동작한다.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const viewport = scrollRef.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]',
+    );
+    if (viewport) {
+      viewport.scrollTop = viewport.scrollHeight;
     }
   }, [messages, isLoading]);
 
@@ -82,9 +89,12 @@ export default function TestUIPage() {
         </p>
       </header>
 
-      <div
+      {/* min-h-0: flex column 자식이 content로 늘어나지 않고 shrink하도록
+          허용. 없으면 ScrollArea가 content에 맞춰 커져서 overflow가 발동하지
+          않는다. ChatContainer와 동일한 패턴. */}
+      <ScrollArea
         ref={scrollRef}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 min-h-0"
         data-testid="messages-area"
       >
         <div className="mx-auto max-w-3xl py-4">
@@ -118,7 +128,7 @@ export default function TestUIPage() {
             />
           )}
         </div>
-      </div>
+      </ScrollArea>
 
       <div className="border-t border-border p-4">
         <div className="mx-auto flex max-w-3xl gap-2">
