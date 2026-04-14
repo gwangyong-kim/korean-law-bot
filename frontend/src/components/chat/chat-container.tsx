@@ -16,12 +16,12 @@ import { StreamingSkeletonBubble } from "./streaming-skeleton-bubble";
 import { parseChatError, type ParsedError } from "@/lib/error-messages";
 
 const EXAMPLE_QUESTIONS = [
-  "근로기준법 연차휴가 규정 알려줘",
+  "중대재해처벌법 제4조 안전보건 확보 의무 알려줘",
   "개인정보보호법 제15조 전문 보여줘",
-  "부당해고 관련 판례 찾아줘",
+  "성과급이 통상임금에 포함되는지 판례 찾아줘",
   "이 계약 조항이 법적으로 유효한지 검토해줘",
-  "수입 통관 시 필요한 법령 체크리스트",
-  "하도급법 위반 사례와 판례",
+  "전자상거래법 청약철회 가능 기간은?",
+  "경업금지 약정의 효력 관련 대법원 판례",
 ];
 
 interface ChatContainerProps {
