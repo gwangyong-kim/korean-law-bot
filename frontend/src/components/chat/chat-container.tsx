@@ -58,6 +58,18 @@ export function ChatContainer({
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevLenRef = useRef(0);
 
+  // 과거 대화 복원 (post-v1 fix): initialMessages는 lib/conversations.ts에
+  // localStorage로 저장된 flat Message[]이다. useChat은 세션마다 빈 messages로
+  // 시작하므로 (Phase 4 drop으로 reseed API 미사용), 과거 대화를 클릭해도
+  // 화면이 비어보였다. 해결: mount 시점의 initialMessages를 priorRef로 한 번
+  // 캡처해서 live useChat messages 위에 정적으로 렌더. key={activeId}로
+  // remount되므로 전환 시 항상 fresh. Save effect도 priorRef.current + 새
+  // turn을 merge해서 history를 monotonic하게 append.
+  // Trade-off: Gemini는 priorRef 내용을 context로 받지 못한다 — 과거 대화
+  // 위에 새 질문이 올라와도 fresh session으로 답함. 사용자는 과거를 "읽을"
+  // 수만 있고 "연속해서" 대화할 수는 없다. 풀 reseed는 Phase 4 재개 시 해결.
+  const priorRef = useRef<Message[]>(initialMessages);
+
   const isLoading = status === "streaming" || status === "submitted";
 
   // 새 메시지 시 하단 스크롤.
@@ -73,20 +85,23 @@ export function ChatContainer({
     }
   }, [messages]);
 
-  // 메시지 변경 시 localStorage에 저장
+  // 메시지 변경 시 localStorage에 저장.
+  // priorRef.current(과거 대화 스냅샷) + 라이브 useChat 턴을 merge해서
+  // 저장한다 — 그래야 다음 세션 open 시에도 전체 이력이 보인다. useChat
+  // 메시지만 저장하면 과거 대화가 덮어씌워져 사라진다.
   useEffect(() => {
     if (messages.length === 0) return;
     if (messages.length === prevLenRef.current && status === "streaming") return;
     prevLenRef.current = messages.length;
 
-    const mapped: Message[] = messages.map((m) => ({
+    const liveTurn: Message[] = messages.map((m) => ({
       id: m.id,
       role: m.role as "user" | "assistant",
       content: extractAssistantText(m),
     }));
 
     if (status !== "streaming") {
-      onMessagesChange(mapped);
+      onMessagesChange([...priorRef.current, ...liveTurn]);
     }
   }, [messages, status, onMessagesChange]);
 
@@ -166,12 +181,16 @@ export function ChatContainer({
   }, [clearError, messages, regenerate, sendMessage, modelId]);
 
   function handleExport() {
-    const text = messages
-      .map((m) => {
-        const role = m.role === "user" ? "👤 질문" : "⚖️ 답변";
-        return `${role}\n${extractAssistantText(m)}`;
-      })
-      .join("\n\n" + "─".repeat(40) + "\n\n");
+    // 과거 대화(priorRef) + 라이브 세션(messages) 둘 다 export.
+    const priorLines = priorRef.current.map((m) => {
+      const role = m.role === "user" ? "👤 질문" : "⚖️ 답변";
+      return `${role}\n${m.content}`;
+    });
+    const liveLines = messages.map((m) => {
+      const role = m.role === "user" ? "👤 질문" : "⚖️ 답변";
+      return `${role}\n${extractAssistantText(m)}`;
+    });
+    const text = [...priorLines, ...liveLines].join("\n\n" + "─".repeat(40) + "\n\n");
 
     const header = `법령 검색 대화 기록\n날짜: ${new Date().toLocaleString("ko-KR")}\n${"═".repeat(40)}\n\n`;
     const blob = new Blob([header + text], { type: "text/plain;charset=utf-8" });
@@ -191,8 +210,8 @@ export function ChatContainer({
 
   return (
     <div className="flex h-full flex-col">
-      {/* 내보내기 버튼 (메시지 있을 때만) */}
-      {messages.length > 0 && (
+      {/* 내보내기 버튼 (메시지 있을 때만). 과거 대화 복원 경로도 포함. */}
+      {(messages.length > 0 || priorRef.current.length > 0) && (
         <div className="flex justify-end px-4 pt-2">
           <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={handleExport}>
             <Download className="h-3.5 w-3.5" />
@@ -206,10 +225,25 @@ export function ChatContainer({
           overflow:scroll이 절대 발동하지 않아 답변이 길어지면 입력창이 화면
           밖으로 밀려나고 스크롤도 안 된다. */}
       <ScrollArea ref={scrollRef} className="flex-1 min-h-0 px-4">
-        {messages.length === 0 && initialMessages.length === 0 ? (
+        {messages.length === 0 && priorRef.current.length === 0 ? (
           <EmptyState onQuestionClick={handleExampleClick} />
         ) : (
           <div className="mx-auto max-w-3xl py-4">
+            {/* 과거 대화 복원 (정적, 읽기 전용). priorRef는 mount 시점의
+                initialMessages 스냅샷 — key={activeId}로 remount되므로 전환
+                시 항상 fresh. Gemini는 이 내용을 context로 받지 않으므로
+                "이전 대화 내용 보이기"만 지원하고 "이어서 대화"는 Phase 4의
+                풀 reseed 경로에 남긴다. */}
+            {priorRef.current.map((m) => (
+              <ChatMessage
+                key={`prior-${m.id}`}
+                id={m.id}
+                role={m.role}
+                content={m.content}
+                isFavorite={favorites.has(m.id)}
+                onToggleFavorite={handleToggleFavorite}
+              />
+            ))}
             {messages.map((m, idx) => {
               const isLast = idx === messages.length - 1;
               const attachedError =
