@@ -116,6 +116,7 @@ type ErrorCode =
   | "mcp_busy"
   | "mcp_offline"
   | "stream_timeout"
+  | "rate_limited"
   | "unknown";
 
 // ─── 메시지 source-of-truth 규약 ─────────────────────────────
@@ -131,6 +132,7 @@ const KOREAN_ERROR_MESSAGES: Record<ErrorCode, string> = {
   mcp_busy: "법령 검색 서버가 현재 혼잡합니다. 잠시 후 다시 시도해주세요.",
   mcp_offline: "법령 검색 서버에 연결할 수 없어 일반 답변만 드릴 수 있습니다.",
   stream_timeout: "응답 생성 시간이 초과되었습니다. 질문을 더 간단히 해보세요.",
+  rate_limited: "LLM 사용량이 일시적으로 한도에 도달했습니다. 1분 정도 후 다시 시도해주세요.",
   unknown: "알 수 없는 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.",
 };
 
@@ -158,13 +160,24 @@ function classifyMcpError(err: unknown): ErrorCode {
   return "unknown";
 }
 
-// stream 도중 발생한 에러를 'stream_timeout' | 'unknown' 중 하나로 분류.
+// stream 도중 발생한 에러를 에러 코드 하나로 분류.
+// AI_RetryError + "quota exceeded" 류의 Gemini free-tier 한도 에러는
+// rate_limited 로 surface해서 사용자/디버거가 맥락 없이 "unknown" 만
+//보고 헤매지 않도록 한다.
 function classifyStreamError(
   err: unknown
 ): Exclude<ErrorCode, "mcp_timeout" | "mcp_busy" | "mcp_offline"> {
   if (!(err instanceof Error)) return "unknown";
-  if (err.name === "AbortError" || /aborted/i.test(err.message ?? "")) return "stream_timeout";
-  if (/timeout/i.test(err.message ?? "")) return "stream_timeout";
+  const msg = err.message ?? "";
+  const name = err.name ?? "";
+  if (name === "AbortError" || /aborted/i.test(msg)) return "stream_timeout";
+  if (
+    name === "AI_RetryError" ||
+    /quota|rate[-_ ]?limit|generate_content.*requests/i.test(msg)
+  ) {
+    return "rate_limited";
+  }
+  if (/timeout/i.test(msg)) return "stream_timeout";
   return "unknown";
 }
 

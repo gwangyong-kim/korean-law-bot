@@ -30,6 +30,7 @@ export type ErrorCode =
   | "mcp_busy"
   | "mcp_offline"
   | "stream_timeout"
+  | "rate_limited"
   | "unknown";
 
 export interface ParsedError {
@@ -50,6 +51,8 @@ export const KOREAN_MESSAGES: Record<ErrorCode, string> = {
     "[⚠️ 미확인 답변] 법령 검색 서버에 연결할 수 없어 일반 답변만 드릴 수 있습니다.",
   stream_timeout:
     "응답 생성 시간이 초과되었습니다. 질문을 더 간단히 해보세요.",
+  rate_limited:
+    "LLM 사용량이 일시적으로 한도에 도달했습니다. 1분 정도 후 다시 시도해주세요.",
   unknown:
     "알 수 없는 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.",
 };
@@ -88,6 +91,14 @@ export function parseChatError(err: Error | undefined): ParsedError {
   }
 
   // Legacy/raw fallback.
+  // Gemini/LLM rate-limit/quota — classified BEFORE the generic 429→mcp_busy
+  // rule so "quota exceeded" free-tier errors surface a specific message
+  // instead of pointing the user at the law search server.
+  if (
+    /quota|rate[-_ ]?limit|AI_RetryError|generate_content.*requests/i.test(raw)
+  ) {
+    return { code: "rate_limited", message: KOREAN_MESSAGES.rate_limited };
+  }
   if (raw.includes("503") || /Max sessions/i.test(raw) || raw.includes("429")) {
     return { code: "mcp_busy", message: KOREAN_MESSAGES.mcp_busy };
   }
