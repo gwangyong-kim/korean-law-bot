@@ -157,13 +157,17 @@ export function ChatSidebar({
 
       {/* 단축키 + Powered by */}
       <div className="px-5 pb-4 space-y-3">
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--text-xs)] text-muted-foreground/40">
+        {/* 다크 모드 contrast fix (2026-04-14): text-muted-foreground/40과
+            opacity-50은 라이트 모드에선 읽혔지만 다크 모드 배경(L 0.18)에선
+            contrast 를 AA 미달로 떨어뜨림. base --muted-foreground (L 0.78)
+            자체가 이미 secondary hierarchy 이므로 추가 opacity 감쇠 제거. */}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--text-xs)] text-muted-foreground">
           <span>Ctrl+⇧+O 새 대화</span>
           <span>Ctrl+/ 검색</span>
           <span>Ctrl+B 사이드바</span>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 opacity-50">
+        <div className="flex items-center justify-center gap-1.5">
           <span className="text-[length:var(--text-xs)] text-muted-foreground">Powered by</span>
           <div
             className="h-4 w-16 bg-primary"
