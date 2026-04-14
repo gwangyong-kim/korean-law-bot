@@ -16,7 +16,7 @@
  */
 
 import { useChat } from "@ai-sdk/react";
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { MessagePartRenderer } from "@/components/chat/message-part-renderer";
 import { StreamingSkeletonBubble } from "@/components/chat/streaming-skeleton-bubble";
 import { ChatMessage } from "@/components/chat/chat-message";
@@ -33,13 +33,19 @@ export default function TestUIPage() {
   // 2026-04-14: ?model= query param + visible selector for Tier A A/B testing.
   // Lets us quickly switch Gemini models (e.g. 2.5-flash ↔ 2.0-flash) when one
   // model's free-tier RPM is exhausted during UAT without redeploying.
-  const initialModelId = useMemo(() => {
-    if (typeof window === "undefined") return DEFAULT_MODEL;
+  //
+  // The page is statically prerendered (○ Static in next build), so the
+  // initial SSR render must use DEFAULT_MODEL — URLSearchParams isn't
+  // available during SSR, and a client-only initial-state function would
+  // still get baked into the static HTML. useEffect runs AFTER hydration
+  // on the client only, so that's where we read the query param and sync.
+  const [modelId, setModelId] = useState<string>(DEFAULT_MODEL);
+  useEffect(() => {
     const fromQuery = new URLSearchParams(window.location.search).get("model");
-    if (fromQuery && MODELS.some((m) => m.id === fromQuery)) return fromQuery;
-    return DEFAULT_MODEL;
+    if (fromQuery && MODELS.some((m) => m.id === fromQuery)) {
+      setModelId(fromQuery);
+    }
   }, []);
-  const [modelId, setModelId] = useState<string>(initialModelId);
 
   const isLoading = status === "streaming" || status === "submitted";
 
