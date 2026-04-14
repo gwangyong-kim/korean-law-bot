@@ -14,6 +14,7 @@ import { extractAssistantText } from "@/lib/ui-message-parts";
 import { MessagePartRenderer } from "./message-part-renderer";
 import { StreamingSkeletonBubble } from "./streaming-skeleton-bubble";
 import { parseChatError, type ParsedError } from "@/lib/error-messages";
+import { DEFAULT_MODEL, getModelInfo } from "@/lib/models";
 
 const EXAMPLE_QUESTIONS = [
   "중대재해처벌법 제4조 안전보건 확보 의무 알려줘",
@@ -40,13 +41,21 @@ export function ChatContainer({
   });
   const [input, setInput] = useState("");
   const [modelId, setModelId] = useState(() => {
-    if (typeof window === "undefined") return "gemini-2.5-flash";
-    return localStorage.getItem("law-bot-model") || "gemini-2.5-flash";
+    if (typeof window === "undefined") return DEFAULT_MODEL;
+    // localStorage에 저장된 modelId가 현재 MODELS 목록에 존재하는지 검증.
+    // 없으면(예: 이전에 선택한 모델이 deactivate됐거나 리스트에서 제거됨)
+    // DEFAULT_MODEL로 자동 fallback하고 캐시도 갱신한다. 이렇게 안 하면
+    // 사용자 UI에는 새 기본값이 보여도 실제 요청은 stale modelId로 가서
+    // "사용량 한도 도달" 같은 오해 에러를 보게 된다.
+    const cached = localStorage.getItem("law-bot-model-v2");
+    if (cached && getModelInfo(cached)) return cached;
+    if (cached) localStorage.setItem("law-bot-model-v2", DEFAULT_MODEL);
+    return DEFAULT_MODEL;
   });
 
   function handleModelChange(id: string) {
     setModelId(id);
-    localStorage.setItem("law-bot-model", id);
+    localStorage.setItem("law-bot-model-v2", id);
   }
   const [favorites, setFavorites] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
