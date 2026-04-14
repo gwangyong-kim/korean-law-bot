@@ -146,42 +146,46 @@
 /* Dark Mode */
 .dark {
   --background: oklch(0.18 0.01 50);
-  --foreground: oklch(0.92 0.01 80);
+  --foreground: oklch(0.95 0.01 80);
   --card: oklch(0.22 0.012 50);
-  --card-foreground: oklch(0.92 0.01 80);
+  --card-foreground: oklch(0.95 0.01 80);
   --popover: oklch(0.22 0.012 50);
-  --popover-foreground: oklch(0.92 0.01 80);
+  --popover-foreground: oklch(0.95 0.01 80);
   --primary: oklch(0.68 0.16 30);
   --primary-foreground: oklch(0.98 0.005 80);
   --secondary: oklch(0.28 0.012 50);
-  --secondary-foreground: oklch(0.92 0.01 80);
+  --secondary-foreground: oklch(0.95 0.01 80);
   --muted: oklch(0.28 0.01 50);
-  --muted-foreground: oklch(0.65 0.015 60);
+  /* Contrast fix (2026-04-14): L 0.65 → 0.78 on background L 0.18.
+     Delta 0.60 matches light mode's delta (0.98 → 0.45 = 0.53) with
+     margin for the darker dark-bg baseline. WCAG AA ≥ 4.5:1 target. */
+  --muted-foreground: oklch(0.78 0.02 60);
   --accent: oklch(0.72 0.07 175);
-  --accent-foreground: oklch(0.92 0.01 80);
-  --destructive: oklch(0.62 0.19 27);
-  --border: oklch(0.32 0.01 50);
-  --input: oklch(0.32 0.01 50);
+  --accent-foreground: oklch(0.95 0.01 80);
+  --destructive: oklch(0.72 0.19 27);
+  --border: oklch(0.34 0.01 50);
+  --input: oklch(0.34 0.01 50);
   --ring: oklch(0.68 0.16 30);
-  --success: oklch(0.72 0.12 160);
+  --success: oklch(0.76 0.13 160);
   --success-bg: oklch(0.25 0.04 160);
-  --warning: oklch(0.72 0.14 55);
+  --warning: oklch(0.78 0.14 55);
   --warning-bg: oklch(0.25 0.04 55);
-  --info: oklch(0.65 0.15 280);
+  --info: oklch(0.72 0.15 280);
   --info-bg: oklch(0.25 0.04 280);
   --error-bg: oklch(0.25 0.04 27);
   --chart-1: oklch(0.68 0.16 30);
-  --chart-2: oklch(0.72 0.12 160);
-  --chart-3: oklch(0.72 0.14 55);
-  --chart-4: oklch(0.65 0.15 280);
-  --chart-5: oklch(0.74 0.10 200);
+  --chart-2: oklch(0.76 0.13 160);
+  --chart-3: oklch(0.78 0.14 55);
+  --chart-4: oklch(0.72 0.15 280);
+  --chart-5: oklch(0.78 0.10 200);
   --sidebar: oklch(0.16 0.01 50);
-  --sidebar-foreground: oklch(0.78 0.01 60);
+  /* Sidebar text also bumped for consistency (secondary text on dark bg). */
+  --sidebar-foreground: oklch(0.88 0.012 60);
   --sidebar-primary: oklch(0.68 0.16 30);
   --sidebar-primary-foreground: oklch(0.98 0.005 80);
   --sidebar-accent: oklch(0.25 0.02 30);
-  --sidebar-accent-foreground: oklch(0.78 0.01 60);
-  --sidebar-border: oklch(0.32 0.01 50);
+  --sidebar-accent-foreground: oklch(0.88 0.012 60);
+  --sidebar-border: oklch(0.34 0.01 50);
   --sidebar-ring: oklch(0.68 0.16 30);
 }
 
