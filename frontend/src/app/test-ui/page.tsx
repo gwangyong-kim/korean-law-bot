@@ -16,18 +16,30 @@
  */
 
 import { useChat } from "@ai-sdk/react";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { MessagePartRenderer } from "@/components/chat/message-part-renderer";
 import { StreamingSkeletonBubble } from "@/components/chat/streaming-skeleton-bubble";
 import { ChatMessage } from "@/components/chat/chat-message";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { parseChatError, type ParsedError } from "@/lib/error-messages";
 import { extractAssistantText } from "@/lib/ui-message-parts";
+import { MODELS, DEFAULT_MODEL } from "@/lib/models";
 
 export default function TestUIPage() {
   const { messages, sendMessage, status, error, regenerate, clearError } = useChat();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 2026-04-14: ?model= query param + visible selector for Tier A A/B testing.
+  // Lets us quickly switch Gemini models (e.g. 2.5-flash ↔ 2.0-flash) when one
+  // model's free-tier RPM is exhausted during UAT without redeploying.
+  const initialModelId = useMemo(() => {
+    if (typeof window === "undefined") return DEFAULT_MODEL;
+    const fromQuery = new URLSearchParams(window.location.search).get("model");
+    if (fromQuery && MODELS.some((m) => m.id === fromQuery)) return fromQuery;
+    return DEFAULT_MODEL;
+  }, []);
+  const [modelId, setModelId] = useState<string>(initialModelId);
 
   const isLoading = status === "streaming" || status === "submitted";
 
@@ -45,7 +57,7 @@ export default function TestUIPage() {
 
   function handleSend() {
     if (!input.trim() || isLoading) return;
-    sendMessage({ text: input }, { body: { modelId: "gemini-2.5-flash" } });
+    sendMessage({ text: input }, { body: { modelId } });
     setInput("");
   }
 
@@ -53,15 +65,15 @@ export default function TestUIPage() {
     clearError();
     const last = messages[messages.length - 1];
     if (last?.role === "assistant") {
-      await regenerate({ body: { modelId: "gemini-2.5-flash" } });
+      await regenerate({ body: { modelId } });
       return;
     }
     if (last?.role === "user") {
       const text = extractAssistantText(last);
       if (!text) return;
-      sendMessage({ text }, { body: { modelId: "gemini-2.5-flash" } });
+      sendMessage({ text }, { body: { modelId } });
     }
-  }, [clearError, messages, regenerate, sendMessage]);
+  }, [clearError, messages, regenerate, sendMessage, modelId]);
 
   const parsedError: ParsedError | undefined = error ? parseChatError(error) : undefined;
   const lastMessage = messages[messages.length - 1];
@@ -86,6 +98,21 @@ export default function TestUIPage() {
               </strong>
             </>
           )}
+          {" | "}
+          <span className="font-mono">model:</span>{" "}
+          <select
+            data-testid="model-select"
+            value={modelId}
+            onChange={(e) => setModelId(e.target.value)}
+            disabled={isLoading}
+            className="ml-1 rounded border border-border bg-background px-1 py-0.5 font-mono text-xs"
+          >
+            {MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id}
+              </option>
+            ))}
+          </select>
         </p>
       </header>
 

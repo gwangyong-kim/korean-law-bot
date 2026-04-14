@@ -16,7 +16,7 @@ export const MODELS: ModelInfo[] = [
     id: "gemini-2.5-flash",
     name: "Gemini 2.5 Flash",
     provider: "google",
-    description: "최신 모델, 고성능",
+    description: "최신 모델, 고성능 (무료 RPM 낮음, 쿼터 소진 주의)",
     free: true,
   },
   {
@@ -24,6 +24,13 @@ export const MODELS: ModelInfo[] = [
     name: "Gemini 2.5 Pro",
     provider: "google",
     description: "최고 성능, 복잡한 질문에 적합",
+    free: true,
+  },
+  {
+    id: "gemini-2.0-flash",
+    name: "Gemini 2.0 Flash",
+    provider: "google",
+    description: "안정 모델, 별도 쿼터 — 2.5 한도 초과 시 fallback",
     free: true,
   },
   // 확장 예시 (API 키 설정 시 활성화):
