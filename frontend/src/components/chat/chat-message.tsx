@@ -111,24 +111,46 @@ export function ChatMessage({
         */}
         {hasBodyText && (
           <article
+            // Note: @tailwindcss/typography 플러그인이 설치되어 있지 않아
+            // `prose-*` modifier 들은 전부 no-op이었다 (matchCount 0 확인).
+            // 플러그인 설치는 default prose 스타일이 갑자기 들어와 regression
+            // 가능성 → arbitrary children selector로 직접 spacing/타이포 제어.
+            // Tailwind v4 arbitrary: `[&>p]:my-4` → `.class > p { margin: 1rem 0 }`
+            // preflight 의 `p { margin: 0 }` reset 을 specificity 로 이김.
             className={cn(
-              "prose prose-base dark:prose-invert max-w-[72ch]",
-              "prose-p:leading-relaxed prose-p:my-3",
-              "prose-li:leading-relaxed prose-li:my-1",
-              "prose-headings:text-foreground prose-headings:font-semibold",
-              "prose-headings:mt-6 prose-headings:mb-3",
-              "prose-h2:text-lg prose-h3:text-base",
-              "prose-strong:text-foreground prose-strong:font-semibold",
-              "prose-em:text-foreground",
-              "prose-blockquote:border-l-primary prose-blockquote:bg-muted/40",
-              "prose-blockquote:py-2 prose-blockquote:pl-4 prose-blockquote:pr-3",
-              "prose-blockquote:not-italic prose-blockquote:text-foreground",
-              "prose-blockquote:rounded-r-md prose-blockquote:my-4",
-              "prose-code:bg-muted prose-code:text-foreground",
-              "prose-code:px-1 prose-code:py-0.5 prose-code:rounded",
-              "prose-code:before:content-none prose-code:after:content-none",
-              "prose-code:text-[length:var(--text-sm)]",
-              "prose-hr:my-6 prose-hr:border-border",
+              "max-w-[72ch] text-[length:var(--text-base)] text-foreground",
+              // Paragraphs: 16px base, 1.8 leading (Korean 장문 최적), 16px 간격
+              "[&>p]:my-4 [&>p]:leading-[1.8]",
+              // Lists: top-level spacing + bullet indent + 항목 간 gap
+              "[&>ul]:my-4 [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:space-y-2",
+              "[&>ol]:my-4 [&>ol]:list-decimal [&>ol]:pl-6 [&>ol]:space-y-2",
+              // List items themselves + any nested list
+              "[&_li]:leading-[1.8]",
+              "[&_ul_ul]:my-2 [&_ul_ol]:my-2 [&_ol_ul]:my-2 [&_ol_ol]:my-2",
+              "[&_ul_ul]:list-[circle] [&_ul_ul]:pl-5",
+              // Headings — hierarchy + 위쪽 여유
+              "[&>h1]:text-xl [&>h1]:font-semibold [&>h1]:mt-8 [&>h1]:mb-3",
+              "[&>h2]:text-lg [&>h2]:font-semibold [&>h2]:mt-8 [&>h2]:mb-3",
+              "[&>h3]:text-base [&>h3]:font-semibold [&>h3]:mt-6 [&>h3]:mb-2",
+              "[&>h4]:text-base [&>h4]:font-semibold [&>h4]:mt-5 [&>h4]:mb-2",
+              // Inline emphasis — 다크모드 대비 보장
+              "[&_strong]:font-semibold [&_strong]:text-foreground",
+              "[&_em]:italic",
+              // Blockquote — primary border + muted bg 로 시각 weight
+              "[&_blockquote]:border-l-4 [&_blockquote]:border-l-primary",
+              "[&_blockquote]:bg-muted/40 [&_blockquote]:py-2 [&_blockquote]:pl-4 [&_blockquote]:pr-3",
+              "[&_blockquote]:rounded-r-md [&_blockquote]:my-4",
+              "[&_blockquote]:text-foreground",
+              "[&_blockquote_p]:my-1",
+              // Inline code chip
+              "[&_code]:bg-muted [&_code]:text-foreground",
+              "[&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded",
+              "[&_code]:text-[length:var(--text-sm)] [&_code]:font-mono",
+              // Horizontal rule
+              "[&>hr]:my-6 [&>hr]:border-border",
+              // Links
+              "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 hover:[&_a]:no-underline",
+              // First/last child: no outer margin (avoid double gap with flex parent)
               "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
             )}
           >
