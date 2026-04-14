@@ -1,8 +1,19 @@
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
-import type { ToolSet } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 import { google } from "@ai-sdk/google";
+import { anthropic } from "@ai-sdk/anthropic";
 import { createMCPClient } from "@ai-sdk/mcp";
 import type { MCPClient } from "@ai-sdk/mcp";
+
+// 2026-04-14: multi-provider dispatch. model ID prefix determines which
+// @ai-sdk provider to call — claude-* → Anthropic, gemini-* → Google.
+// Added after Gemini free-tier quota exhaustion forced Claude fallback
+// during Tier A prompt UAT. Unknown prefixes default to Google for backward
+// compatibility with existing gemini-* model IDs.
+function resolveModel(modelId: string): LanguageModel {
+  if (modelId.startsWith("claude")) return anthropic(modelId);
+  return google(modelId);
+}
 
 // D-12: Vercel serverless 60초 유지. Phase 2 스코프에서는 상향하지 않음.
 // Fluid Compute 활성화 여부와 stream_timeout UX 방어는 02-03 UAT에서 재검증.
@@ -302,7 +313,7 @@ export async function POST(req: Request) {
   };
 
   const result = streamText({
-    model: google(selectedModel),
+    model: resolveModel(selectedModel),
     system: SYSTEM_PROMPT,
     messages,
     stopWhen: stepCountIs(8),

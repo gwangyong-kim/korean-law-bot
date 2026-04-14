@@ -30,8 +30,31 @@ export const MODELS: ModelInfo[] = [
     id: "gemini-2.0-flash",
     name: "Gemini 2.0 Flash",
     provider: "google",
-    description: "안정 모델, 별도 쿼터 — 2.5 한도 초과 시 fallback",
+    description: "안정 모델, 별도 쿼터 — 2.5 한도 초과 시 fallback (실제로는 free-tier limit 0)",
     free: true,
+  },
+  // Anthropic Claude (2026-04-14): Gemini free-tier 마비 시 fallback.
+  // 가격대 오름순으로 정렬 — Haiku = 제일 싼 빠른 모델, Opus = 최고 성능.
+  {
+    id: "claude-haiku-4-5",
+    name: "Claude Haiku 4.5",
+    provider: "anthropic",
+    description: "빠른 응답, 저비용 — 간단한 조회·정의 질문",
+    free: false,
+  },
+  {
+    id: "claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    provider: "anthropic",
+    description: "균형 — 해석·판례 분석, 실무 브리핑",
+    free: false,
+  },
+  {
+    id: "claude-opus-4-6",
+    name: "Claude Opus 4.6",
+    provider: "anthropic",
+    description: "최고 성능 — 복잡 쟁점·계약 검토·다단 추론",
+    free: false,
   },
   // 확장 예시 (API 키 설정 시 활성화):
   // {
