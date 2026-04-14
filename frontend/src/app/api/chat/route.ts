@@ -430,6 +430,37 @@ export async function POST(req: Request) {
     messages,
     stopWhen: stepCountIs(8),
     ...(Object.keys(tools).length > 0 ? { tools } : {}),
+    // 2026-04-15: tool 체인 실패 진단용 관측 로깅. "도구 검색은 완료했는데
+    // 시스템 오류로 확인 못했다"류 fallback 응답의 원인(어떤 tool이 에러를
+    // 반환했는지, 또는 stepCountIs 한도에 걸렸는지)을 확정하기 위함.
+    onStepFinish: ({ toolCalls, toolResults, finishReason }) => {
+      if (toolCalls.length === 0) return;
+      const parts = toolCalls.map((call) => {
+        const callId = (call as { toolCallId?: string }).toolCallId;
+        const matched = toolResults.find(
+          (r) => (r as { toolCallId?: string }).toolCallId === callId
+        );
+        const argsStr = (() => {
+          try {
+            return JSON.stringify((call as { input?: unknown }).input ?? {}).slice(0, 120);
+          } catch {
+            return "?";
+          }
+        })();
+        if (!matched) return `${call.toolName}(${argsStr})=pending`;
+        try {
+          const json = JSON.stringify(matched);
+          const errMatch = json.match(/"error"\s*:\s*"([^"]{0,150})"/);
+          if (errMatch) return `${call.toolName}(${argsStr})=ERR:${errMatch[1]}`;
+          return `${call.toolName}(${argsStr})=ok:${json.length}b`;
+        } catch {
+          return `${call.toolName}(${argsStr})=unserializable`;
+        }
+      });
+      console.log(
+        `[route.ts] step finishReason=${finishReason} tools=[${parts.join(" | ")}]`
+      );
+    },
     onFinish: async ({ finishReason, usage }) => {
       console.log("[route.ts] streamText finishReason:", finishReason, "usage:", usage);
       if (usage?.inputTokens != null && usage?.outputTokens != null) {
