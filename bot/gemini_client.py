@@ -9,10 +9,15 @@ import json
 import os
 
 import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
 from google.generativeai.types import content_types
 
 from law import api
 from law.tools import law_tools
+
+
+class QuotaExceededError(Exception):
+    """Gemini API 무료 티어 한도 초과"""
 
 SYSTEM_INSTRUCTION = """\
 당신은 한국 법령 전문 어시스턴트입니다.
@@ -47,7 +52,7 @@ MAX_TOOL_ROUNDS = 6  # 무한루프 방지
 def _init_model() -> genai.GenerativeModel:
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
     return genai.GenerativeModel(
-        model_name="gemma-4-27b-it",
+        model_name="gemini-2.5-flash",
         tools=[law_tools],
         system_instruction=SYSTEM_INSTRUCTION,
     )
@@ -75,7 +80,10 @@ async def ask(user_message: str, history: list[dict] | None = None) -> str:
     model = _init_model()
     chat = model.start_chat(history=history or [])
 
-    response = chat.send_message(user_message)
+    try:
+        response = chat.send_message(user_message)
+    except google_exceptions.ResourceExhausted as e:
+        raise QuotaExceededError(str(e)) from e
 
     for _ in range(MAX_TOOL_ROUNDS):
         # function_call이 있는 part 찾기
@@ -106,18 +114,21 @@ async def ask(user_message: str, history: list[dict] | None = None) -> str:
         result_str = _truncate(json.dumps(result, ensure_ascii=False, default=str))
 
         # function_response를 Gemini에 전달
-        response = chat.send_message(
-            genai.protos.Content(
-                parts=[
-                    genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
-                            name=func_name,
-                            response={"result": result_str},
+        try:
+            response = chat.send_message(
+                genai.protos.Content(
+                    parts=[
+                        genai.protos.Part(
+                            function_response=genai.protos.FunctionResponse(
+                                name=func_name,
+                                response={"result": result_str},
+                            )
                         )
-                    )
-                ]
+                    ]
+                )
             )
-        )
+        except google_exceptions.ResourceExhausted as e:
+            raise QuotaExceededError(str(e)) from e
 
     # 최종 텍스트 추출
     text_parts = []

@@ -50,6 +50,16 @@ def create_app(bot_token: str) -> App:
             answer = await gemini_client.ask(user_message, history=history)
 
             await say(text=answer, thread_ts=thread_ts)
+        except gemini_client.QuotaExceededError:
+            logger.warning("Gemini API 사용량 한도 초과")
+            await say(
+                text=(
+                    ":hourglass: 현재 Gemini 무료 사용량 한도에 도달했습니다.\n"
+                    "잠시 후(보통 1분 이내) 다시 질문해주세요. "
+                    "계속 발생하면 일일 한도일 수 있으니 내일 다시 시도해주세요."
+                ),
+                thread_ts=thread_ts,
+            )
         except Exception as e:
             logger.exception("답변 생성 실패")
             await say(
