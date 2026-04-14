@@ -1,17 +1,94 @@
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import type { LanguageModel, ToolSet } from "ai";
 import { google } from "@ai-sdk/google";
-import { anthropic } from "@ai-sdk/anthropic";
+import { groq } from "@ai-sdk/groq";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createMCPClient } from "@ai-sdk/mcp";
 import type { MCPClient } from "@ai-sdk/mcp";
+import { getModelInfo } from "@/lib/models";
 
-// 2026-04-14: multi-provider dispatch. model ID prefix determines which
-// @ai-sdk provider to call — claude-* → Anthropic, gemini-* → Google.
-// Added after Gemini free-tier quota exhaustion forced Claude fallback
-// during Tier A prompt UAT. Unknown prefixes default to Google for backward
-// compatibility with existing gemini-* model IDs.
+// 2026-04-14: OpenRouter provider lazy init (env var at request time).
+let _openrouter: ReturnType<typeof createOpenRouter> | null = null;
+function getOpenRouter() {
+  if (_openrouter) return _openrouter;
+  _openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY ?? "" });
+  return _openrouter;
+}
+
+// 2026-04-14: 모델별 USD 가격 (1M 토큰 단위). 무료 tier 모델은 0으로 둔다.
+// Gemini 가격은 Google AI Studio 공식 기준 (2026년 초).
+// https://ai.google.dev/gemini-api/docs/pricing
+// Prompt 200K 미만 구간만 지원 — 200K 초과는 드물어 단일 가격으로 근사.
+const MODEL_PRICING: Record<string, { inPerM: number; outPerM: number }> = {
+  "gemini-2.5-flash": { inPerM: 0.075, outPerM: 0.3 },
+  "gemini-2.5-pro": { inPerM: 1.25, outPerM: 5.0 },
+  "gemini-2.0-flash": { inPerM: 0.1, outPerM: 0.4 },
+};
+
+// USD → KRW 환율. env var로 오버라이드 가능 (USD_KRW_RATE). 기본값 1400은
+// 2026년 초 시세 기준 근사치 — 요청당 비용이 원 단위 미만이라 정밀도 불필요.
+// 환율이 크게 변하면 Vercel 환경변수에서 조정하면 된다.
+function getUsdKrwRate(): number {
+  const override = process.env.USD_KRW_RATE;
+  if (override) {
+    const n = Number(override);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 1400;
+}
+
+// Slack Web API(chat.postMessage)로 비용 알림 전송. 기존 law bot의 bot token을
+// 재사용하고 알림 대상 채널은 SLACK_BILLING_CHANNEL로 지정한다. 실패는 조용히
+// 삼킨다 — 사용자 응답을 블로킹하거나 에러를 유발해선 안 된다.
+//
+// 필요한 Slack 권한: `chat:write` (대상 채널에 봇이 초대되어 있어야 함)
+// SLACK_BILLING_CHANNEL은 채널 ID (예: C0123ABC) 또는 "#채널명" 둘 다 허용.
+// DM으로 받으려면 user ID (U...) 사용 가능 (단, 봇과 DM 연 상태여야 함).
+async function notifyBilling(
+  modelId: string,
+  inputTokens: number,
+  outputTokens: number
+): Promise<void> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  const channel = process.env.SLACK_BILLING_CHANNEL;
+  if (!token || !channel) return;
+  const price = MODEL_PRICING[modelId];
+  if (!price) return; // 무료 모델 또는 가격 미등록 모델은 알림 생략
+  const cost =
+    (inputTokens / 1_000_000) * price.inPerM +
+    (outputTokens / 1_000_000) * price.outPerM;
+  const krw = cost * getUsdKrwRate();
+  const krwStr = krw < 1
+    ? `₩${krw.toFixed(2)}`
+    : `₩${Math.round(krw).toLocaleString()}`;
+  const text = `💰 ${modelId} · 입력 ${inputTokens.toLocaleString()} · 출력 ${outputTokens.toLocaleString()} 토큰 · *$${cost.toFixed(6)}* (${krwStr})`;
+  try {
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ channel, text }),
+    });
+    const body = (await res.json()) as { ok: boolean; error?: string };
+    if (!body.ok) {
+      console.error("[route.ts] Slack chat.postMessage failed:", body.error);
+    }
+  } catch (err) {
+    console.error("[route.ts] Slack billing post failed:", err);
+  }
+}
+
+// 2026-04-14: multi-provider dispatch driven by MODELS registry (models.ts).
+// modelId prefix는 공급자마다 규칙이 달라 (Groq의 "meta-llama/..." vs Google의
+// "gemini-...") prefix 매칭은 깨지기 쉽다. 대신 models.ts의 provider 필드를
+// source of truth로 삼아 dispatch한다. 미등록 모델은 Google로 fallback하여
+// 레거시 gemini-* ID와의 호환을 유지한다.
 function resolveModel(modelId: string): LanguageModel {
-  if (modelId.startsWith("claude")) return anthropic(modelId);
+  const info = getModelInfo(modelId);
+  if (info?.provider === "groq") return groq(modelId);
+  if (info?.provider === "openrouter") return getOpenRouter().chat(modelId);
   return google(modelId);
 }
 
@@ -19,89 +96,84 @@ function resolveModel(modelId: string): LanguageModel {
 // Fluid Compute 활성화 여부와 stream_timeout UX 방어는 02-03 UAT에서 재검증.
 export const maxDuration = 60;
 
-const SYSTEM_PROMPT = `당신은 10년차 한국 송무 변호사로, 사내 비법조인 팀(HR, 영업, 안전, 마케팅, 컴플라이언스) 대상 법률 브리핑을 담당합니다. 전문성은 유지하되 법률가 특유의 난해한 어휘(legalese)는 피하고, 실무자가 바로 행동할 수 있는 수준으로 설명하세요.
+const SYSTEM_PROMPT = `당신은 10년차 한국 송무 변호사로, 사내 비법조인 팀(HR, 영업, 안전, 마케팅, 컴플라이언스) 대상 법률 브리핑을 담당합니다. 전문성은 유지하되 legalese는 피하고, 실무자가 바로 행동할 수 있게 설명하세요.
 
-━━━ 절대 규칙 (위반 금지) ━━━
-- 법령 조문, 판례, 법률 해석을 답변할 때 반드시 도구를 호출하여 확인한 내용만 답변하세요.
-- 도구 호출 없이 법령 내용을 답변하는 것은 금지합니다. 기억에 의존하지 마세요.
-- 도구로 확인하지 못한 내용은 반드시 "⚠️ 확인되지 않은 정보"라고 명시하세요.
-- 모든 법령/판례 인용에 **상세 출처** 를 표시하세요. 아래 "상세 출처 형식" 섹션을 반드시 따를 것.
-- 도구 검색 결과에 없는 내용을 추가하거나 꾸며내지 마세요.
-- 단, '안녕하세요', '고마워요' 같은 일상 인사나 봇 자체에 대한 메타 질문(이름, 기능)에는 도구를 호출하지 않고 자연스럽게 답변하세요. 도구는 법령·시행령·시행규칙·판례·행정규칙 등 **법률 내용 질문**에만 호출합니다.
-━━━━━━━━━━━━━━━━━━━━━━
+━━━ 절대 규칙 ━━━
+- 법령·판례·법률 해석은 반드시 도구(search_law, get_law_text, search_decisions, get_decision_text)로 확인한 내용만 답변. 기억으로 답변 금지.
+- 도구로 확인 못한 내용은 "⚠️ 확인되지 않은 정보"로 명시.
+- 모든 법령/판례 인용에 아래 "상세 출처 형식"을 반드시 따를 것.
+- 검색 결과에 없는 내용 추가·창작 금지. 없으면 "검색 결과가 없습니다"로 답변.
+- 예외: 일상 인사·봇 메타 질문(이름/기능)은 도구 없이 자연스럽게 답변.
+━━━━━━━━━━━━━━━
 
-규칙:
-1. 법령 관련 질문을 받으면 먼저 도구를 호출하세요. 절대 기억으로 답변하지 마세요.
-2. 반드시 한국어로 답변하세요.
-3. 법령 조문을 인용할 때는 법령명, 조/항/호를 명시하세요.
-4. 판례를 인용할 때는 사건번호와 선고일을 포함하세요.
-5. 답변은 간결하게 4000자 이내로 작성하세요.
-6. 검색 결과가 없으면 솔직히 "검색 결과가 없습니다"라고 답하세요.
-7. Markdown 포맷을 사용하세요: **볼드**, *이탤릭*, \`코드\`, > 인용
+기본 지침:
+1. 반드시 한국어로 답변, 4000자 이내.
+2. Markdown 사용 (**볼드**, \`코드\`, > 인용).
+3. 법령 조문 인용 시 법령명·조/항/호, 판례는 사건번호·선고일 포함.
 
-━━━ 법률 답변 구조 (법령·판례·계약검토 질문에만 적용) ━━━
-일상 인사·메타 질문에는 적용하지 않습니다. 법률 답변일 때는 반드시 다음 구조를 따르세요.
+━━━ 법률 답변 구조 (법률 질문에만 적용) ━━━
+1. **핵심 결론:** {1~2문장} — 반드시 첫 줄. 배경 설명부터 시작 금지.
+2. 본문: 조문 원문 → 해석 → 실무 포인트 순서.
+3. 디스클레이머: "※ 본 답변은 법률 정보 제공이며, 구체적 사안은 법무팀 또는 변호사와 상의하시기 바랍니다."
+4. **이어지는 질문 추천** (아래 "후속 질문 추천" 섹션 참고).
 
-1. **첫 줄 = 핵심 결론**: 답변을 반드시 "**핵심 결론:** {1~2문장}" 으로 시작하세요. 사용자가 이 한 줄만 읽어도 무엇이 중요한지 알 수 있어야 합니다. 결론 없이 배경 설명부터 시작하는 것은 금지입니다.
-2. **본문**: 핵심 결론 뒤에 상세 분석을 이어가세요. 조문 원문 인용 → 해석 → 실무 포인트 순서를 권장합니다.
-3. **말미 디스클레이머**: 법률 답변의 마지막 줄에 반드시 다음 문구를 포함하세요:
-   "※ 본 답변은 법률 정보 제공이며, 구체적 사안은 법무팀 또는 변호사와 상의하시기 바랍니다."
+━━━ 톤 규칙 ━━━
+- 단정적 표현(반드시/절대/명백히)은 법적 리스크 → 헤징으로 전환 ("~로 보입니다", "~할 여지가 있습니다").
+- 변호사법 경계 고려: 법률 자문이 아닌 **정보 제공**임이 드러나게.
+- 단, 도구로 확인한 조문/판례 **원문**은 그대로 인용 (헤징 대상 아님).
 
-━━━ 톤 / 어휘 규칙 ━━━
-- 단정적 표현(반드시, 절대, 무조건, 명백히, 확실히)은 법적 리스크가 있으므로 헤징 표현으로 바꿔 쓰세요.
-  선호: "~로 보입니다", "~할 여지가 있습니다", "다만 사안에 따라 달라질 수 있습니다", "~로 해석될 수 있습니다", "실무상 ~가 일반적입니다"
-- 한국 변호사법 및 법률 서비스 경계를 고려해, 구체적 법률 자문이 아닌 **정보 제공** 임이 분명히 드러나도록 쓰세요.
-- 단, 도구로 확인한 조문/판례 **원문** 자체는 그대로 인용하세요 (원문은 헤징 대상이 아님).
+━━━ 답변 생성 프로세스 (법률 질문에만 적용) ━━━
+답변 전 자체 검증: (1) 인용 조문·판례 번호·시행일이 도구 반환값과 일치하는가, (2) 사용자 의도에 정확히 답했는가, (3) 예외·한계를 빠뜨리지 않았는가. 검증 과정은 출력 금지, 최종본만 출력.
 
-━━━ 답변 생성 프로세스 (법률 답변일 때만) ━━━
-최종 답변을 출력하기 전에, 머릿속에서 다음 단계를 거치세요. 이 과정 자체는 사용자에게 출력하지 마세요 — 최종본만 출력합니다.
-1. 도구 호출 결과를 바탕으로 초안을 작성합니다.
-2. 초안에 대해 스스로 3개의 검증 질문을 만듭니다:
-   - 인용한 조문/판례 번호·시행일이 정확한가? 도구가 반환한 값과 일치하는가?
-   - 사용자가 실제로 묻고자 한 것에 답했는가? (질문 재해석 오류는 없는가)
-   - 중요한 예외·한계·연결되는 법령/판례를 빠뜨리지는 않았는가?
-3. 각 검증 질문에 답하며 초안을 보완합니다.
-4. 보완된 최종본만 사용자에게 출력합니다.
+━━━ 쉬운 설명 ━━━
+법률 용어에는 괄호로 풀이 병기 (예: "선의의 제3자(사정을 모르는 제3자)"). 조문 인용 뒤 "쉽게 말하면..." 요약 첨부.
 
-쉬운 설명 원칙:
-- 법률 용어가 나오면 괄호 안에 쉬운 설명을 덧붙이세요. 예: "선의의 제3자(사정을 모르는 제3자)"
-- "채무불이행"→"약속을 지키지 않음", "하자담보"→"물건 결함에 대한 책임" 등 일상 용어로 풀어주세요.
-- 조문 내용을 인용한 뒤 "쉽게 말하면..."으로 요약을 덧붙여주세요.
-
-계약서/규정 검토 요청 시:
-- 붙여넣어진 텍스트에서 법적 리스크를 항목별로 분석하세요.
-- 각 항목에 관련 법령 근거를 명시하세요.
-- 위험도를 🔴높음 🟡보통 🟢낮음으로 표시하세요.
+━━━ 계약서/규정 검토 ━━━
+항목별 법적 리스크 분석 + 관련 법령 근거 + 위험도(🔴높음 🟡보통 🟢낮음) 표시.
 
 ━━━ 상세 출처 형식 (MANDATORY) ━━━
-도구(search_law, get_law_text, search_decisions, get_decision_text 등)가 반환한
-결과에는 \`법령명\`, \`공포일\`, \`시행일\`, 판례의 경우 \`사건번호\`, \`선고일\` 등의
-메타데이터가 포함되어 있습니다. 이 값들을 **그대로 복사**해서 아래 형식으로
-출처를 표시하세요. "도구 검색 결과"라는 뭉뚱그린 표현은 금지입니다.
+도구 결과의 메타데이터(법령명·공포일·시행일·사건번호·선고일)를 **그대로 복사**해서 아래 형식으로 출처 표시. "도구 검색 결과"라는 뭉뚱그린 표현 금지.
 
-법령/시행령/시행규칙 인용 시 형식:
-\`> [출처: {법령명} {조항 번호}, 시행일 {YYYY.MM.DD}, 법제처 국가법령정보센터]\`
+법령/시행령/시행규칙:
+\`> [출처: {법령명} {조항}, 시행일 {YYYY.MM.DD}, 법제처 국가법령정보센터]\`
+예: \`> [출처: 근로기준법 제60조(연차 유급휴가), 시행일 2025.10.23, 법제처 국가법령정보센터]\`
 
-- 예시 1: \`> [출처: 근로기준법 제60조(연차 유급휴가), 시행일 2025.10.23, 법제처 국가법령정보센터]\`
-- 예시 2: \`> [출처: 민법 제750조(불법행위의 내용), 시행일 2013.07.01, 법제처 국가법령정보센터]\`
-- 예시 3 (복수 조항 인용): 각 인용 블록마다 출처를 별도로 표시하거나, 답변 마지막에 "참고 법령" 섹션을 두고 각 조항을 나열합니다.
-
-판례 인용 시 형식:
+판례:
 \`> [출처: {법원} {사건번호} {선고일 YYYY.MM.DD} 판결, 법제처 국가법령정보센터]\`
-- 예시: \`> [출처: 대법원 2019다12345 2020.03.15 판결, 법제처 국가법령정보센터]\`
+예: \`> [출처: 대법원 2019다12345 2020.03.15 판결, 법제처 국가법령정보센터]\`
 
 변환 규칙:
-- 도구 결과의 \`공포일: 20241022\` / \`시행일: 20251023\` 같은 8자리 숫자는 반드시 \`2024.10.22\` / \`2025.10.23\` 형식으로 포맷팅 후 출처에 기입
-- 시행일이 명시되어 있으면 시행일 사용, 없으면 공포일 사용 ("공포일" 라벨 유지)
-- 조항 번호에 조문 제목(연차 유급휴가 등)이 있으면 괄호 안에 포함
-- 법령ID / MST 같은 기술적 식별자는 출처에 **노출하지 않음** (사용자에게 의미 없음)
-- 여러 조항을 인용하면서 모두 같은 법령이면 출처를 **한 번만** 쓰고 "동법 제X조", "같은 법 제X조" 로 reference 가능
-- \`\\n\\n> [출처: ...]\\n\\n\` 처럼 blockquote(>) + 전후 빈 줄로 감싸서 본문과 시각적으로 구분
+- 8자리 날짜(20241022)는 \`2024.10.22\`로 포맷. 시행일 우선, 없으면 공포일.
+- 조항 번호에 조문 제목 있으면 괄호 병기. 법령ID/MST는 노출 금지.
+- 같은 법령 복수 인용 시 출처 1회, 이후 "동법 제X조" 사용.
+- blockquote(>) + 전후 빈 줄로 본문과 분리.
 
 답변 형식:
-- 도구로 확인한 내용: 그대로 인용 + 위 형식의 상세 출처 (blockquote)
-- 일반 상식/설명: 법령 인용 없이 설명만 (출처 불필요)
-- 확인 불가: "⚠️ 이 내용은 도구로 확인하지 못했습니다. 정확한 확인이 필요합니다."`;
+- 도구 확인 내용: 그대로 인용 + 상세 출처
+- 일반 설명: 출처 불필요
+- 확인 불가: "⚠️ 도구로 확인하지 못했습니다"
+
+━━━ 후속 질문 추천 (법률 질문에만 적용) ━━━
+법률 답변 마지막(디스클레이머 아래)에 사용자가 이어서 물어볼 만한 구체적 후속 질문 **2~3개**를 제시합니다. 이 봇의 도구로 실제 답변 가능한 주제여야 하며, 클릭만 해도 의미 있는 질문이 되도록 조문 번호·판례·실무 시나리오 등 구체 식별자를 포함하세요.
+
+형식 (반드시 이 Markdown 구조로):
+\`\`\`
+**💡 이어지는 질문:**
+- 질문 1
+- 질문 2
+- 질문 3
+\`\`\`
+
+좋은 예시:
+- "연차 사용 촉진 제도는 어떻게 운영하나요?"
+- "미사용 연차수당은 어떻게 계산하나요?"
+- "연차휴가 관련 최근 대법원 판례가 있나요?"
+
+나쁜 예시 (지나치게 일반적):
+- "더 자세히 알려주세요"
+- "다른 질문 있으신가요?"
+
+일상 인사·메타 질문 답변에는 후속 질문 섹션을 생성하지 않습니다.`;
 
 // ─────────────────────────────────────────────────────────
 // Phase 2 hotfix v2 (2026-04-14): fresh MCPClient per request.
@@ -128,6 +200,7 @@ type ErrorCode =
   | "mcp_offline"
   | "stream_timeout"
   | "rate_limited"
+  | "invalid_model"
   | "unknown";
 
 // ─── 메시지 source-of-truth 규약 ─────────────────────────────
@@ -143,7 +216,8 @@ const KOREAN_ERROR_MESSAGES: Record<ErrorCode, string> = {
   mcp_busy: "법령 검색 서버가 현재 혼잡합니다. 잠시 후 다시 시도해주세요.",
   mcp_offline: "법령 검색 서버에 연결할 수 없어 일반 답변만 드릴 수 있습니다.",
   stream_timeout: "응답 생성 시간이 초과되었습니다. 질문을 더 간단히 해보세요.",
-  rate_limited: "LLM 사용량이 일시적으로 한도에 도달했습니다. 1분 정도 후 다시 시도해주세요.",
+  rate_limited: "현재 모델의 사용량 한도에 도달했습니다. 잠시 후 다시 시도하거나 다른 모델을 선택해주세요.",
+  invalid_model: "선택한 모델을 사용할 수 없습니다. 다른 모델을 선택해주세요.",
   unknown: "알 수 없는 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.",
 };
 
@@ -154,11 +228,22 @@ function getMcpUrl(): string {
 }
 
 // D-11: createMCPClient / tools() throw의 에러 원인을 5개 code 중 하나로 분류.
+// 2026-04-14: "Session not found. Please reinitialize." (HTTP 404) 를 transient
+// busy 에러로 재분류 — glluga-law-mcp의 Streamable HTTP session 관리 버그로
+// 간헐적으로 발생하지만 같은 요청을 1-2초 후 재시도하면 거의 항상 성공한다.
+// 이 재분류로 connectMcpWithRetry의 1회 재시도 경로가 활성화된다.
 function classifyMcpError(err: unknown): ErrorCode {
   if (!(err instanceof Error)) return "unknown";
   const msg = err.message ?? "";
   if (msg.includes("mcp_timeout")) return "mcp_timeout";
-  if (msg.includes("503") || msg.includes("429") || /Max sessions/i.test(msg)) return "mcp_busy";
+  if (
+    msg.includes("503") ||
+    msg.includes("429") ||
+    /Max sessions/i.test(msg) ||
+    /Session not found|reinitialize|HTTP 404/i.test(msg)
+  ) {
+    return "mcp_busy";
+  }
   if (msg.includes("ENOTFOUND") || msg.includes("ECONNREFUSED") || msg.includes("fetch failed")) {
     return "mcp_offline";
   }
@@ -172,19 +257,44 @@ function classifyMcpError(err: unknown): ErrorCode {
 }
 
 // stream 도중 발생한 에러를 에러 코드 하나로 분류.
-// AI_RetryError + "quota exceeded" 류의 Gemini free-tier 한도 에러는
+// AI_RetryError + "quota exceeded" 류의 Gemini/Groq free-tier 한도 에러는
 // rate_limited 로 surface해서 사용자/디버거가 맥락 없이 "unknown" 만
-//보고 헤매지 않도록 한다.
+// 보고 헤매지 않도록 한다.
+// AI_APICallError + "does not exist or you do not have access" 는 Groq에
+// 존재하지 않거나 비활성인 model ID를 고른 경우 — invalid_model 로 분리.
+// 2026-04-14: AI SDK Groq provider는 일부 에러를 plain object로 던진다
+// (Error 인스턴스가 아님) — 이 경우에도 message/name 필드를 최대한 추출한다.
+function extractErrorFields(err: unknown): { name: string; msg: string } {
+  if (err instanceof Error) {
+    return { name: err.name ?? "Error", msg: err.message ?? "" };
+  }
+  if (err && typeof err === "object") {
+    const obj = err as Record<string, unknown>;
+    const name =
+      typeof obj.name === "string" ? obj.name : typeof obj.constructor === "function" ? obj.constructor.name : "object";
+    // message 필드가 없으면 JSON stringify해서 패턴 매칭에라도 쓴다.
+    const msg =
+      typeof obj.message === "string"
+        ? obj.message
+        : (() => {
+            try { return JSON.stringify(err); } catch { return String(err); }
+          })();
+    return { name, msg };
+  }
+  return { name: typeof err, msg: String(err) };
+}
+
 function classifyStreamError(
   err: unknown
 ): Exclude<ErrorCode, "mcp_timeout" | "mcp_busy" | "mcp_offline"> {
-  if (!(err instanceof Error)) return "unknown";
-  const msg = err.message ?? "";
-  const name = err.name ?? "";
+  const { name, msg } = extractErrorFields(err);
   if (name === "AbortError" || /aborted/i.test(msg)) return "stream_timeout";
+  if (/does not exist|do not have access|model not found|invalid.*model/i.test(msg)) {
+    return "invalid_model";
+  }
   if (
     name === "AI_RetryError" ||
-    /quota|rate[-_ ]?limit|generate_content.*requests/i.test(msg)
+    /quota|rate[-_ ]?limit|generate_content.*requests|tokens per (day|minute)|tpd|tpm|rpm/i.test(msg)
   ) {
     return "rate_limited";
   }
@@ -241,15 +351,27 @@ async function connectMcpOnce(): Promise<{ client: MCPClient; tools: ToolSet }> 
 }
 
 async function connectMcpWithRetry(): Promise<{ client: MCPClient; tools: ToolSet }> {
-  try {
-    return await connectMcpOnce();
-  } catch (e) {
-    if (classifyMcpError(e) !== "mcp_busy") throw e;
-    // D-08: 1초 대기 후 1회 retry. 임시 관측 로그.
-    console.log("[route.ts] mcp retry after 1s (503/Max sessions detected)");
-    await new Promise((r) => setTimeout(r, 1000));
-    return await connectMcpOnce();
+  // 2026-04-14: "Session not found" race condition을 커버하기 위해 최대 3회
+  // 시도한다. glluga-law-mcp의 Streamable HTTP session pool이 간헐적으로
+  // 새 세션을 404로 거부하는데 (원인 불명), 1-2초 간격 재시도면 거의 항상
+  // 회복된다. 실측 3/3 curl 연속 호출에서 attempt 1 성공·2/3 실패 패턴이
+  // 관측되어 backoff는 고정 간격 1초로 유지한다.
+  const maxAttempts = 5;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await connectMcpOnce();
+    } catch (e) {
+      lastErr = e;
+      if (classifyMcpError(e) !== "mcp_busy") throw e;
+      if (attempt === maxAttempts) break;
+      // 1초 → 1.5초 → 2초 → 2.5초. 최악 7초 overhead, Vercel 60초 limit 대비 여유.
+      const delay = 500 + attempt * 500;
+      console.log(`[route.ts] mcp retry ${attempt}/${maxAttempts - 1} after ${delay}ms (transient busy)`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
   }
+  throw lastErr;
 }
 
 // Hotfix v2 (2026-04-14): fresh client per request. No module-scope caching
@@ -284,8 +406,8 @@ export async function POST(req: Request) {
     tools = fresh.tools;
   } catch (e) {
     const code = classifyMcpError(e);
-    const errMsg = e instanceof Error ? e.message : String(e);
-    console.error("[route.ts] mcp init failed:", { code, errMsg });
+    const { name: errName, msg: errMsg } = extractErrorFields(e);
+    console.error("[route.ts] mcp init failed:", { code, errName, errMsg });
 
     // D-05: pre-stream 에러는 구조화된 JSON body + HTTP status로 반환.
     // - mcp_busy    → 503 Service Unavailable
@@ -318,8 +440,12 @@ export async function POST(req: Request) {
     messages,
     stopWhen: stepCountIs(8),
     ...(Object.keys(tools).length > 0 ? { tools } : {}),
-    onFinish: async ({ finishReason }) => {
-      console.log("[route.ts] streamText finishReason:", finishReason);
+    onFinish: async ({ finishReason, usage }) => {
+      console.log("[route.ts] streamText finishReason:", finishReason, "usage:", usage);
+      if (usage?.inputTokens != null && usage?.outputTokens != null) {
+        // fire-and-forget — 응답 스트림 블로킹 금지
+        void notifyBilling(selectedModel, usage.inputTokens, usage.outputTokens);
+      }
       await safeClose();
     },
     onError: async ({ error }) => {
@@ -342,7 +468,9 @@ export async function POST(req: Request) {
       }
     },
     onError: (error) => {
-      console.error("[route.ts] toUIMessageStreamResponse error:", error);
+      // 서버 로그에는 전체 에러, 응답 body에는 code + 한국어 메시지만.
+      const { name, msg } = extractErrorFields(error);
+      console.error("[route.ts] toUIMessageStreamResponse error:", { name, msg });
       // D-05: mid-stream 에러는 JSON-stringified 한 structured error 문자열을
       // 반환해 client parseChatError()가 pre-stream 경로와 동일하게 파싱한다.
       const code = classifyStreamError(error);
