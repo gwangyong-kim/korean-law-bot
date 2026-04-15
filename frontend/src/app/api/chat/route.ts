@@ -1,4 +1,11 @@
-import { streamText, convertToModelMessages, stepCountIs } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  stepCountIs,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  consumeStream,
+} from "ai";
 import type { LanguageModel, ToolSet } from "ai";
 import { google } from "@ai-sdk/google";
 import { groq } from "@ai-sdk/groq";
@@ -75,9 +82,12 @@ function resolveModel(modelId: string): LanguageModel {
   return google(modelId);
 }
 
-// D-12: Vercel serverless 60초 유지. Phase 2 스코프에서는 상향하지 않음.
-// Fluid Compute 활성화 여부와 stream_timeout UX 방어는 02-03 UAT에서 재검증.
-export const maxDuration = 60;
+// 2026-04-15: 60s → 120s 상향. 근거: stepCountIs(8) 한도로 계약서 검토류
+// 긴 프롬프트가 step 8에서 잘리는 문제 해결을 위해 stopWhen을 adaptive 패턴
+// ([stepCountIs(40), time-budget])으로 교체했고, 이를 뒷받침할 wall-clock
+// 여유가 필요하다. 120s는 Vercel Hobby+Fluid Compute 범위 내. time-budget은
+// 아래 streamText 호출에서 (maxDuration-10s) = 110s로 계산된다.
+export const maxDuration = 120;
 
 const SYSTEM_PROMPT = `당신은 10년차 한국 송무 변호사로, 사내 비법조인 팀(HR, 영업, 안전, 마케팅, 컴플라이언스) 대상 법률 브리핑을 담당합니다. 전문성은 유지하되 legalese는 피하고, 실무자가 바로 행동할 수 있게 설명하세요.
 
@@ -424,74 +434,112 @@ export async function POST(req: Request) {
     }
   };
 
-  const result = streamText({
-    model: resolveModel(selectedModel),
-    system: SYSTEM_PROMPT,
-    messages,
-    stopWhen: stepCountIs(8),
-    ...(Object.keys(tools).length > 0 ? { tools } : {}),
-    // 2026-04-15: tool 체인 실패 진단용 관측 로깅. "도구 검색은 완료했는데
-    // 시스템 오류로 확인 못했다"류 fallback 응답의 원인(어떤 tool이 에러를
-    // 반환했는지, 또는 stepCountIs 한도에 걸렸는지)을 확정하기 위함.
-    onStepFinish: ({ toolCalls, toolResults, finishReason }) => {
-      if (toolCalls.length === 0) return;
-      const parts = toolCalls.map((call) => {
-        const callId = (call as { toolCallId?: string }).toolCallId;
-        const matched = toolResults.find(
-          (r) => (r as { toolCallId?: string }).toolCallId === callId
-        );
-        const argsStr = (() => {
-          try {
-            return JSON.stringify((call as { input?: unknown }).input ?? {}).slice(0, 120);
-          } catch {
-            return "?";
-          }
-        })();
-        if (!matched) return `${call.toolName}(${argsStr})=pending`;
-        try {
-          const json = JSON.stringify(matched);
-          const errMatch = json.match(/"error"\s*:\s*"([^"]{0,150})"/);
-          if (errMatch) return `${call.toolName}(${argsStr})=ERR:${errMatch[1]}`;
-          return `${call.toolName}(${argsStr})=ok:${json.length}b`;
-        } catch {
-          return `${call.toolName}(${argsStr})=unserializable`;
-        }
-      });
-      console.log(
-        `[route.ts] step finishReason=${finishReason} tools=[${parts.join(" | ")}]`
-      );
-    },
-    onFinish: async ({ finishReason, usage }) => {
-      console.log("[route.ts] streamText finishReason:", finishReason, "usage:", usage);
-      if (usage?.inputTokens != null && usage?.outputTokens != null) {
-        // fire-and-forget — 응답 스트림 블로킹 금지
-        void notifyBilling(selectedModel, usage.inputTokens, usage.outputTokens);
-      }
-      await safeClose();
-    },
-    onError: async ({ error }) => {
-      console.error("[route.ts] streamText error:", error);
-      await safeClose();
-    },
-  });
+  // 2026-04-15: adaptive stopWhen 패턴. 정적 stepCountIs(8)이 계약서 검토류
+  // 복잡 요청에서 "몇 step이 충분한가" 추측을 강제해 답변을 일찍 잘라내는
+  // anti-pattern이었음. 이제 세 개의 독립적 safety net으로 대체한다:
+  //   1) stepCountIs(40)      — 런어웨이 루프 방지 (현실 한도의 5배)
+  //   2) time-budget (110s)   — maxDuration(120s) 내에서 stream flush 여유 확보
+  //   3) 모델의 자연 finishReason=stop — 정상 종료 경로 유지
+  // 셋 중 어느 하나라도 만족하면 종료. 단순 질문은 finishReason=stop으로 빠르게
+  // 끝나 영향 없음. 복잡 요청만 step 예산을 실제로 소비한다.
+  const startTime = Date.now();
+  const TIME_BUDGET_MS = (maxDuration - 10) * 1000; // 120s - 10s flush = 110s
 
-  return result.toUIMessageStreamResponse({
-    consumeSseStream: async ({ stream }) => {
-      // Drain the tee'd copy so abort/disconnect doesn't deadlock the response.
-      const reader = stream.getReader();
-      try {
-        while (true) {
-          const { done } = await reader.read();
-          if (done) break;
-        }
-      } finally {
-        reader.releaseLock();
-      }
+  const uiStream = createUIMessageStream({
+    execute: ({ writer }) => {
+      const result = streamText({
+        model: resolveModel(selectedModel),
+        system: SYSTEM_PROMPT,
+        messages,
+        stopWhen: [
+          stepCountIs(40),
+          () => Date.now() - startTime > TIME_BUDGET_MS,
+        ],
+        ...(Object.keys(tools).length > 0 ? { tools } : {}),
+        // 2026-04-15: tool 체인 실패 진단용 관측 로깅. "도구 검색은 완료했는데
+        // 시스템 오류로 확인 못했다"류 fallback 응답의 원인(어떤 tool이 에러를
+        // 반환했는지, 또는 time/step 한도에 걸렸는지)을 확정하기 위함.
+        onStepFinish: ({ toolCalls, toolResults, finishReason }) => {
+          if (toolCalls.length === 0) return;
+          const parts = toolCalls.map((call) => {
+            const callId = (call as { toolCallId?: string }).toolCallId;
+            const matched = toolResults.find(
+              (r) => (r as { toolCallId?: string }).toolCallId === callId
+            );
+            const argsStr = (() => {
+              try {
+                return JSON.stringify((call as { input?: unknown }).input ?? {}).slice(0, 120);
+              } catch {
+                return "?";
+              }
+            })();
+            if (!matched) return `${call.toolName}(${argsStr})=pending`;
+            try {
+              const json = JSON.stringify(matched);
+              const errMatch = json.match(/"error"\s*:\s*"([^"]{0,150})"/);
+              if (errMatch) return `${call.toolName}(${argsStr})=ERR:${errMatch[1]}`;
+              return `${call.toolName}(${argsStr})=ok:${json.length}b`;
+            } catch {
+              return `${call.toolName}(${argsStr})=unserializable`;
+            }
+          });
+          console.log(
+            `[route.ts] step finishReason=${finishReason} tools=[${parts.join(" | ")}]`
+          );
+        },
+        onFinish: async ({ finishReason, usage }) => {
+          const elapsedMs = Date.now() - startTime;
+          console.log(
+            "[route.ts] streamText finishReason:",
+            finishReason,
+            "elapsedMs:",
+            elapsedMs,
+            "usage:",
+            usage
+          );
+          if (usage?.inputTokens != null && usage?.outputTokens != null) {
+            // fire-and-forget — 응답 스트림 블로킹 금지
+            void notifyBilling(selectedModel, usage.inputTokens, usage.outputTokens);
+          }
+
+          // 2026-04-15: 자원 한도(time/step)로 stream이 끊긴 경우 사용자에게
+          // 명시적으로 알린다. 자연 종료(finishReason=stop)는 건드리지 않는다.
+          // writer.merge가 streamText 원본 stream을 이미 보냈고, 여기서
+          // 추가로 text-start/delta/end 3-이벤트 시퀀스를 append한다 — 새로운
+          // id로 별도 text part를 만들어 assistant 메시지 끝에 붙이는 방식.
+          if (finishReason !== "stop") {
+            try {
+              const elapsedSec = Math.round(elapsedMs / 1000);
+              const bannerId = `truncation-banner-${Date.now()}`;
+              writer.write({ type: "text-start", id: bannerId });
+              writer.write({
+                type: "text-delta",
+                id: bannerId,
+                delta:
+                  `\n\n---\n\n> ⚠️ **답변이 자원 한도(${elapsedSec}초)에서 중단되었습니다** ` +
+                  `(사유: \`${finishReason}\`). 남은 조항/쟁점이 있다면 해당 부분만 ` +
+                  `따로 다시 질문해 주세요 — 질문을 좁히면 정확한 답변을 드릴 수 있습니다.`,
+              });
+              writer.write({ type: "text-end", id: bannerId });
+            } catch (writeErr) {
+              console.error("[route.ts] truncation banner write failed:", writeErr);
+            }
+          }
+
+          await safeClose();
+        },
+        onError: async ({ error }) => {
+          console.error("[route.ts] streamText error:", error);
+          await safeClose();
+        },
+      });
+
+      writer.merge(result.toUIMessageStream());
     },
     onError: (error) => {
       // 서버 로그에는 전체 에러, 응답 body에는 code + 한국어 메시지만.
       const { name, msg } = extractErrorFields(error);
-      console.error("[route.ts] toUIMessageStreamResponse error:", { name, msg });
+      console.error("[route.ts] createUIMessageStream error:", { name, msg });
       // D-05: mid-stream 에러는 JSON-stringified 한 structured error 문자열을
       // 반환해 client parseChatError()가 pre-stream 경로와 동일하게 파싱한다.
       const code = classifyStreamError(error);
@@ -501,5 +549,10 @@ export async function POST(req: Request) {
       // LAW_API_KEY leak 방지 (Phase 1 redaction 유지).
       return structured.replace(/oc=[^&\s"]+/g, "oc=REDACTED");
     },
+  });
+
+  return createUIMessageStreamResponse({
+    stream: uiStream,
+    consumeSseStream: consumeStream,
   });
 }
