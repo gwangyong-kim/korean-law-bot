@@ -507,8 +507,18 @@ export async function POST(req: Request) {
             usage
           );
           if (usage?.inputTokens != null && usage?.outputTokens != null) {
-            // fire-and-forget — 응답 스트림 블로킹 금지
-            void notifyBilling(selectedModel, usage.inputTokens, usage.outputTokens);
+            // 2026-04-15: `void notifyBilling(...)` fire-and-forget이 Vercel
+            // serverless lambda 조기 종료와 경합해서 postSlackMessage가
+            // 호출 중간에 끊기는 버그를 유발했다. 증상: maybeFlushPreviousHour
+            // 의 SETNX lock까지는 설정되지만 그 다음 postSlackMessage fetch가
+            // 완료되지 않아 Slack에 hourly digest가 안 도착. 로그에도 에러
+            // 없음 (fetch가 시작되기 전에 lambda가 종료).
+            //
+            // 해결: await로 전환. onFinish는 이미 stream의 tail-end callback
+            // 이므로 client는 stream payload를 전부 받은 뒤. 여기서 await해도
+            // client-facing 지연 없음. serverless lambda 수명만 notifyBilling
+            // 완료까지 유지되어 Redis write + Slack post가 확실히 끝난다.
+            await notifyBilling(selectedModel, usage.inputTokens, usage.outputTokens);
           }
 
           // 2026-04-15: 자원 한도(time/step)로 stream이 끊긴 경우 사용자에게
