@@ -8,3 +8,9 @@ frontend/node_modules/
 frontend/.next/
 frontend/.env.local
 .vercel
+
+# Local session state (Claude Code, Playwright-MCP, GSD internal counters)
+.claude/
+frontend/.claude/
+.playwright-mcp/
+.planning/.next-call-count

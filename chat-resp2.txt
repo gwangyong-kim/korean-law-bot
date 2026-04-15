@@ -1,0 +1,18 @@
+data: {"type":"start"}
+
+data: {"type":"start-step"}
+
+data: {"type":"tool-input-start","toolCallId":"RWdlR9JHbGvHq2vx","toolName":"search_law","providerMetadata":{"google":{"thoughtSignature":"CiQBvj72+01vRh0uZR0mihAong0xgD7qhkkgLupVOOI+w2a8HpEKgAEBvj72+/PdziqP351rvLN3sA9VSr3mdeIPa9OZw5wrR0f8NCZtOC52Y4M4pz0KPapwo6g7JYqdjQ5aZkSctBnM7dF2IMOsL+IElcohPgfjzKS7ymy36ZOLS6zv/DO0YAvTqGGcqTLpXlTMlSHpTGsRt4sztO8TddwBdbHEUGlZpArpAQG+Pvb7HIBdYxRk4oV0NeXA7vPsSxTLCfkdK/Cp3x5S2ME1gGXXfIbdxAUYTDemMi0y/x/7/nguWn+AW7VzQjUVopbrlSUgv9RJI97d8SCrEoMsoqypQpUainB+5AyxtAJrKLjj/5F/svH6v4uCFgiFIcLx3pyBgSus+oXxVgMITyCdRf5DrHr1Q3mn4t+qMix3WBlHHbBb9rtYrLaFC2KkL4GUoaB3Wn6HZKiqmFqoKCIacdCi0Szd6dBrqJ9tlN0x5r8L2Np1ZRgFVf317HUs75u7QSORV+q5y6UpsitNLgsvcM2qU7/tCqoBAb4+9vv+ycEMDKq57I829qbXmSLzlhSy2ENJ+osyOvZwwvEtEtEl744930MPvP2dhKacm1EIUnpVQdBeHkXo3T6EOXEwnO/cG6G3Q5fmC0jC+NQeN47Qpg1LoUD0Tn/tpJNcFjtHHsSDh3hi3LkMEL4NrB50Qf8TDXeaNbW+5zUjoXclUald/zx9RbxCSaqIQE/e1Tupt6gBeoNDHMXST6jwysqf6XUsqTgKOgG+Pvb70iPh4YPRhgYuK7NDPUKIWcoXMj0eLdYkL8VSJsZaDuWIP9+spk5sB7YzZDv8VRA2juYWIb0="}},"dynamic":true}
+
+data: {"type":"tool-input-delta","toolCallId":"RWdlR9JHbGvHq2vx","inputTextDelta":"{\"query\":\"중대재해처벌법\",\"display\":1}"}
+
+data: {"type":"tool-input-available","toolCallId":"RWdlR9JHbGvHq2vx","toolName":"search_law","input":{"query":"중대재해처벌법","display":1},"providerMetadata":{"google":{"thoughtSignature":"CiQBvj72+01vRh0uZR0mihAong0xgD7qhkkgLupVOOI+w2a8HpEKgAEBvj72+/PdziqP351rvLN3sA9VSr3mdeIPa9OZw5wrR0f8NCZtOC52Y4M4pz0KPapwo6g7JYqdjQ5aZkSctBnM7dF2IMOsL+IElcohPgfjzKS7ymy36ZOLS6zv/DO0YAvTqGGcqTLpXlTMlSHpTGsRt4sztO8TddwBdbHEUGlZpArpAQG+Pvb7HIBdYxRk4oV0NeXA7vPsSxTLCfkdK/Cp3x5S2ME1gGXXfIbdxAUYTDemMi0y/x/7/nguWn+AW7VzQjUVopbrlSUgv9RJI97d8SCrEoMsoqypQpUainB+5AyxtAJrKLjj/5F/svH6v4uCFgiFIcLx3pyBgSus+oXxVgMITyCdRf5DrHr1Q3mn4t+qMix3WBlHHbBb9rtYrLaFC2KkL4GUoaB3Wn6HZKiqmFqoKCIacdCi0Szd6dBrqJ9tlN0x5r8L2Np1ZRgFVf317HUs75u7QSORV+q5y6UpsitNLgsvcM2qU7/tCqoBAb4+9vv+ycEMDKq57I829qbXmSLzlhSy2ENJ+osyOvZwwvEtEtEl744930MPvP2dhKacm1EIUnpVQdBeHkXo3T6EOXEwnO/cG6G3Q5fmC0jC+NQeN47Qpg1LoUD0Tn/tpJNcFjtHHsSDh3hi3LkMEL4NrB50Qf8TDXeaNbW+5zUjoXclUald/zx9RbxCSaqIQE/e1Tupt6gBeoNDHMXST6jwysqf6XUsqTgKOgG+Pvb70iPh4YPRhgYuK7NDPUKIWcoXMj0eLdYkL8VSJsZaDuWIP9+spk5sB7YzZDv8VRA2juYWIb0="}},"dynamic":true}
+
+data: {"type":"tool-output-available","toolCallId":"RWdlR9JHbGvHq2vx","output":{"content":[{"type":"text","text":"검색 결과 (총 2건):\n\n1. 중대재해 처벌 등에 관한 법률\n   - 법령ID: 013993\n   - MST: 228817\n   - 공포일: 20210126\n   - 구분: 법률\n\n"}],"isError":false},"providerMetadata":{"google":{"thoughtSignature":"CiQBvj72+01vRh0uZR0mihAong0xgD7qhkkgLupVOOI+w2a8HpEKgAEBvj72+/PdziqP351rvLN3sA9VSr3mdeIPa9OZw5wrR0f8NCZtOC52Y4M4pz0KPapwo6g7JYqdjQ5aZkSctBnM7dF2IMOsL+IElcohPgfjzKS7ymy36ZOLS6zv/DO0YAvTqGGcqTLpXlTMlSHpTGsRt4sztO8TddwBdbHEUGlZpArpAQG+Pvb7HIBdYxRk4oV0NeXA7vPsSxTLCfkdK/Cp3x5S2ME1gGXXfIbdxAUYTDemMi0y/x/7/nguWn+AW7VzQjUVopbrlSUgv9RJI97d8SCrEoMsoqypQpUainB+5AyxtAJrKLjj/5F/svH6v4uCFgiFIcLx3pyBgSus+oXxVgMITyCdRf5DrHr1Q3mn4t+qMix3WBlHHbBb9rtYrLaFC2KkL4GUoaB3Wn6HZKiqmFqoKCIacdCi0Szd6dBrqJ9tlN0x5r8L2Np1ZRgFVf317HUs75u7QSORV+q5y6UpsitNLgsvcM2qU7/tCqoBAb4+9vv+ycEMDKq57I829qbXmSLzlhSy2ENJ+osyOvZwwvEtEtEl744930MPvP2dhKacm1EIUnpVQdBeHkXo3T6EOXEwnO/cG6G3Q5fmC0jC+NQeN47Qpg1LoUD0Tn/tpJNcFjtHHsSDh3hi3LkMEL4NrB50Qf8TDXeaNbW+5zUjoXclUald/zx9RbxCSaqIQE/e1Tupt6gBeoNDHMXST6jwysqf6XUsqTgKOgG+Pvb70iPh4YPRhgYuK7NDPUKIWcoXMj0eLdYkL8VSJsZaDuWIP9+spk5sB7YzZDv8VRA2juYWIb0="}},"dynamic":true}
+
+data: {"type":"finish-step"}
+
+data: {"type":"error","errorText":"{\"error\":{\"code\":\"unknown\",\"message\":\"알 수 없는 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.\"}}"}
+
+data: [DONE]
+
