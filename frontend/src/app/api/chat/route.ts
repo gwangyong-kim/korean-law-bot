@@ -447,14 +447,21 @@ export async function POST(req: Request) {
 
   const uiStream = createUIMessageStream({
     execute: ({ writer }) => {
+      // Wall-clock 예산은 stopWhen 함수가 아니라 abortSignal로 관리한다.
+      // 이유: stopWhen 배열에 raw function을 넣는 형태(() => boolean)가
+      // 2026-04-15 실험에서 Gemini API로의 첫 호출 자체를 빈 요청으로 만들어
+      // finishReason=other + usage=undefined + 0 tool calls를 유발했다.
+      // abortSignal은 AI SDK v5의 공식 취소 경로로 streamText/tool-calls
+      // 내부를 깔끔하게 중단하고, onFinish의 finishReason도 명확하게
+      // 설정된다. AbortSignal.timeout은 Web 표준이므로 Node/Vercel 모두 지원.
+      const abortSignal = AbortSignal.timeout(TIME_BUDGET_MS);
+
       const result = streamText({
         model: resolveModel(selectedModel),
         system: SYSTEM_PROMPT,
         messages,
-        stopWhen: [
-          stepCountIs(40),
-          () => Date.now() - startTime > TIME_BUDGET_MS,
-        ],
+        abortSignal,
+        stopWhen: stepCountIs(40),
         ...(Object.keys(tools).length > 0 ? { tools } : {}),
         // 2026-04-15: tool 체인 실패 진단용 관측 로깅. "도구 검색은 완료했는데
         // 시스템 오류로 확인 못했다"류 fallback 응답의 원인(어떤 tool이 에러를
