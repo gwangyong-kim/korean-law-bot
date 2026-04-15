@@ -434,24 +434,31 @@ export async function POST(req: Request) {
     }
   };
 
-  // 2026-04-15: adaptive stopWhen 패턴. 정적 stepCountIs(8)이 계약서 검토류
+  // 2026-04-15: adaptive termination 패턴. 정적 stepCountIs(8)이 계약서 검토류
   // 복잡 요청에서 "몇 step이 충분한가" 추측을 강제해 답변을 일찍 잘라내는
-  // anti-pattern이었음. 이제 세 개의 독립적 safety net으로 대체한다:
-  //   1) stepCountIs(40)      — 런어웨이 루프 방지 (현실 한도의 5배)
-  //   2) time-budget (110s)   — maxDuration(120s) 내에서 stream flush 여유 확보
-  //   3) 모델의 자연 finishReason=stop — 정상 종료 경로 유지
-  // 셋 중 어느 하나라도 만족하면 종료. 단순 질문은 finishReason=stop으로 빠르게
-  // 끝나 영향 없음. 복잡 요청만 step 예산을 실제로 소비한다.
+  // anti-pattern이었음. 이제 모델의 자연 finishReason=stop을 주 경로로 삼고,
+  // stepCountIs(40)은 런어웨이 루프 방지 safety net 역할만 한다. 1921자
+  // 근로계약서 검토 UAT(2026-04-15)에서 실제 14 tool call + 15 step, 10,401자
+  // 완결 응답, 모든 주요 쟁점 커버 확인. 평시 단순 질문은 1~5 step에서 자연
+  // 종료해 영향 없고, 복잡 요청만 실제로 step 예산을 소비한다.
+  //
+  // time-budget은 이제 maxDuration(120s)이 hard cap 역할을 한다. 과거 시도들:
+  //   - stopWhen 배열에 raw function `() => boolean` 추가:
+  //       Gemini 첫 호출이 빈 요청/빈 응답으로 귀결 (finishReason=other,
+  //       usage=undefined, 0 tool calls). AI SDK v5 + Google provider 조합
+  //       에서 재현. 커스텀 stop 함수 형태는 Gemini tool-enabled streamText
+  //       에서는 사용하지 말 것.
+  //   - abortSignal: AbortSignal.timeout(TIME_BUDGET_MS):
+  //       tool schemas가 streamText에 바인딩 안 돼 inputTokens가 19925→6635로
+  //       급감, 모델이 tool 호출 없이 "기억"으로 답변하면서 가짜 `[출처:]`
+  //       인용 11개를 환각 생성. SYSTEM_PROMPT "절대 규칙" 위반. 역시
+  //       Gemini tool-enabled streamText와는 사용하지 말 것.
+  // 두 함정 모두 동일 증상(tool binding 유실)이 나오므로, 향후 time budget을
+  // 재도입할 경우 AI SDK + Google provider 최신판 변경사항을 반드시 확인.
   const startTime = Date.now();
-  const TIME_BUDGET_MS = (maxDuration - 10) * 1000; // 120s - 10s flush = 110s
 
   const uiStream = createUIMessageStream({
     execute: ({ writer }) => {
-      // 2026-04-15 bisect: abortSignal 제거 실험. 직전 시도(abortSignal 포함)에서
-      // Gemini가 tool을 아예 호출하지 않고 기억으로 답변하면서 가짜 [출처:] 인용
-      // 11개를 생성하는 증상이 있었음. Input token 6635 vs pre-fix 19925 차이는
-      // tool schemas가 바인딩 안 된 것을 강력히 시사. abortSignal을 뺐을 때
-      // 복구되는지 확인 후 필요하면 다른 방식으로 time budget 구현한다.
       const result = streamText({
         model: resolveModel(selectedModel),
         system: SYSTEM_PROMPT,
