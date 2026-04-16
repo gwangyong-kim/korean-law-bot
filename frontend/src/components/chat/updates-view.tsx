@@ -203,14 +203,22 @@ export function UpdatesView() {
           </div>
         )}
 
-        <div className="mt-8 text-center">
+        <div className="mt-8 flex justify-center gap-4">
+          <a
+            href={`https://github.com/${APP_REPO}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[length:var(--text-sm)] text-primary hover:underline"
+          >
+            앱 GitHub →
+          </a>
           <a
             href={`https://github.com/${MCP_REPO}/commits/main`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[length:var(--text-sm)] text-primary hover:underline"
           >
-            GitHub에서 전체 커밋 보기 →
+            MCP 서버 GitHub →
           </a>
         </div>
       </div>
