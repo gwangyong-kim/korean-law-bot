@@ -14,3 +14,10 @@ frontend/.env.local
 frontend/.claude/
 .playwright-mcp/
 .planning/.next-call-count
+
+# Temporary billing diagnostic files (should never be committed)
+frontend/slack-values.json
+frontend/.env.billing-check
+frontend/billing-diag.mjs
+frontend/slack-ping.mjs
+frontend/set-slack-env.mjs

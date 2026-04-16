@@ -1,7 +1,8 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import type { UIMessage } from "ai";
 import { ChatMessage } from "./chat-message";
 import { ChatInput, type AttachedFile } from "./chat-input";
 import { ModelSelector } from "./model-selector";
@@ -25,6 +26,38 @@ const EXAMPLE_QUESTIONS = [
   "경업금지 약정의 효력 관련 대법원 판례",
 ];
 
+const MAX_CONTEXT_TURNS = 10;
+const MAX_CONTEXT_CHARS = 8000;
+
+function splitContextWindow(msgs: Message[]): {
+  older: Message[];
+  context: UIMessage[];
+} {
+  let splitIdx = Math.max(0, msgs.length - MAX_CONTEXT_TURNS * 2);
+
+  let totalChars = 0;
+  for (let i = splitIdx; i < msgs.length; i++) {
+    totalChars += msgs[i].content.length;
+  }
+  while (totalChars > MAX_CONTEXT_CHARS && splitIdx < msgs.length) {
+    totalChars -= msgs[splitIdx].content.length;
+    splitIdx++;
+  }
+
+  while (splitIdx < msgs.length && msgs[splitIdx].role !== "user") {
+    splitIdx++;
+  }
+
+  const older = msgs.slice(0, splitIdx);
+  const context = msgs.slice(splitIdx).map((m) => ({
+    id: m.id,
+    role: m.role as "user" | "assistant",
+    parts: [{ type: "text" as const, text: m.content }],
+  }));
+
+  return { older, context };
+}
+
 interface ChatContainerProps {
   conversationId: string;
   initialMessages: Message[];
@@ -36,8 +69,19 @@ export function ChatContainer({
   initialMessages,
   onMessagesChange,
 }: ChatContainerProps) {
+  const { olderMessages, contextMessages } = useMemo(
+    () => {
+      const { older, context } = splitContextWindow(initialMessages);
+      return { olderMessages: older, contextMessages: context };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount 시 1회만 계산 (key={activeId}로 remount)
+    [],
+  );
+  const olderRef = useRef<Message[]>(olderMessages);
+
   const { messages, sendMessage, status, error, regenerate, clearError } = useChat({
     id: conversationId,
+    messages: contextMessages,
   });
   const [input, setInput] = useState("");
   const [modelId, setModelId] = useState(() => {
@@ -65,27 +109,30 @@ export function ChatContainer({
     } catch { return new Set(); }
   });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const prevLenRef = useRef(0);
-
-  // 과거 대화 복원 (post-v1 fix): initialMessages는 lib/conversations.ts에
-  // localStorage로 저장된 flat Message[]이다. useChat은 세션마다 빈 messages로
-  // 시작하므로 (Phase 4 drop으로 reseed API 미사용), 과거 대화를 클릭해도
-  // 화면이 비어보였다. 해결: mount 시점의 initialMessages를 priorRef로 한 번
-  // 캡처해서 live useChat messages 위에 정적으로 렌더. key={activeId}로
-  // remount되므로 전환 시 항상 fresh. Save effect도 priorRef.current + 새
-  // turn을 merge해서 history를 monotonic하게 append.
-  // Trade-off: Gemini는 priorRef 내용을 context로 받지 못한다 — 과거 대화
-  // 위에 새 질문이 올라와도 fresh session으로 답함. 사용자는 과거를 "읽을"
-  // 수만 있고 "연속해서" 대화할 수는 없다. 풀 reseed는 Phase 4 재개 시 해결.
-  const priorRef = useRef<Message[]>(initialMessages);
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // 새 메시지 시 하단 스크롤.
-  // Base UI ScrollArea는 Root를 forwardRef 대상으로 넘기고, 실제 scrollable
-  // 요소는 내부의 Viewport(data-slot="scroll-area-viewport")다. Root의
-  // scrollTop을 건드리면 아무 효과가 없다 — Viewport를 직접 찾아서 scroll.
+  // 스크롤 위치 감지: 사용자가 위로 스크롤하면 자동 스크롤 중단,
+  // 하단 근처로 돌아오면 자동 스크롤 재개.
   useEffect(() => {
+    const viewport = scrollRef.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]',
+    );
+    if (!viewport) return;
+    function onScroll() {
+      const el = viewport!;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickToBottomRef.current = distanceFromBottom < 50;
+    }
+    viewport.addEventListener("scroll", onScroll, { passive: true });
+    return () => viewport.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // 새 메시지/스트리밍 시 하단 스크롤 — 사용자가 위로 스크롤한 상태면 건너뜀.
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
     const viewport = scrollRef.current?.querySelector<HTMLElement>(
       '[data-slot="scroll-area-viewport"]',
     );
@@ -95,9 +142,8 @@ export function ChatContainer({
   }, [messages]);
 
   // 메시지 변경 시 localStorage에 저장.
-  // priorRef.current(과거 대화 스냅샷) + 라이브 useChat 턴을 merge해서
-  // 저장한다 — 그래야 다음 세션 open 시에도 전체 이력이 보인다. useChat
-  // 메시지만 저장하면 과거 대화가 덮어씌워져 사라진다.
+  // olderRef(컨텍스트 밖 오래된 메시지) + useChat messages를 merge해서
+  // 전체 이력을 유지한다.
   useEffect(() => {
     if (messages.length === 0) return;
     if (messages.length === prevLenRef.current && status === "streaming") return;
@@ -110,7 +156,7 @@ export function ChatContainer({
     }));
 
     if (status !== "streaming") {
-      onMessagesChange([...priorRef.current, ...liveTurn]);
+      onMessagesChange([...olderRef.current, ...liveTurn]);
     }
   }, [messages, status, onMessagesChange]);
 
@@ -154,6 +200,7 @@ export function ChatContainer({
       sendMessage({ text: fullText }, opts);
     }
     setInput("");
+    stickToBottomRef.current = true;
   }
 
   function handleExampleClick(question: string) {
@@ -190,8 +237,7 @@ export function ChatContainer({
   }, [clearError, messages, regenerate, sendMessage, modelId]);
 
   function handleExport() {
-    // 과거 대화(priorRef) + 라이브 세션(messages) 둘 다 export.
-    const priorLines = priorRef.current.map((m) => {
+    const olderLines = olderRef.current.map((m) => {
       const role = m.role === "user" ? "👤 질문" : "⚖️ 답변";
       return `${role}\n${m.content}`;
     });
@@ -199,7 +245,7 @@ export function ChatContainer({
       const role = m.role === "user" ? "👤 질문" : "⚖️ 답변";
       return `${role}\n${extractAssistantText(m)}`;
     });
-    const text = [...priorLines, ...liveLines].join("\n\n" + "─".repeat(40) + "\n\n");
+    const text = [...olderLines, ...liveLines].join("\n\n" + "─".repeat(40) + "\n\n");
 
     const header = `법령 검색 대화 기록\n날짜: ${new Date().toLocaleString("ko-KR")}\n${"═".repeat(40)}\n\n`;
     const blob = new Blob([header + text], { type: "text/plain;charset=utf-8" });
@@ -219,8 +265,7 @@ export function ChatContainer({
 
   return (
     <div className="flex h-full flex-col">
-      {/* 내보내기 버튼 (메시지 있을 때만). 과거 대화 복원 경로도 포함. */}
-      {(messages.length > 0 || priorRef.current.length > 0) && (
+      {(messages.length > 0 || olderRef.current.length > 0) && (
         <div className="flex justify-end px-4 pt-2">
           <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={handleExport}>
             <Download className="h-3.5 w-3.5" />
@@ -234,18 +279,13 @@ export function ChatContainer({
           overflow:scroll이 절대 발동하지 않아 답변이 길어지면 입력창이 화면
           밖으로 밀려나고 스크롤도 안 된다. */}
       <ScrollArea ref={scrollRef} className="flex-1 min-h-0 px-4">
-        {messages.length === 0 && priorRef.current.length === 0 ? (
+        {messages.length === 0 && olderRef.current.length === 0 ? (
           <EmptyState onQuestionClick={handleExampleClick} />
         ) : (
           <div className="mx-auto max-w-3xl py-4">
-            {/* 과거 대화 복원 (정적, 읽기 전용). priorRef는 mount 시점의
-                initialMessages 스냅샷 — key={activeId}로 remount되므로 전환
-                시 항상 fresh. Gemini는 이 내용을 context로 받지 않으므로
-                "이전 대화 내용 보이기"만 지원하고 "이어서 대화"는 Phase 4의
-                풀 reseed 경로에 남긴다. */}
-            {priorRef.current.map((m) => (
+            {olderRef.current.map((m) => (
               <ChatMessage
-                key={`prior-${m.id}`}
+                key={`older-${m.id}`}
                 id={m.id}
                 role={m.role}
                 content={m.content}
