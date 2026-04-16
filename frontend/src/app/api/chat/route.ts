@@ -29,14 +29,10 @@ function getOpenRouter() {
   return _openrouter;
 }
 
-// 2026-04-14: 모델별 USD 가격 (1M 토큰 단위). 무료 tier 모델은 0으로 둔다.
-// Gemini 가격은 Google AI Studio 공식 기준 (2026년 초).
 // https://ai.google.dev/gemini-api/docs/pricing
-// Prompt 200K 미만 구간만 지원 — 200K 초과는 드물어 단일 가격으로 근사.
 export const MODEL_PRICING: Record<string, { inPerM: number; outPerM: number }> = {
-  "gemini-2.5-flash": { inPerM: 0.075, outPerM: 0.3 },
-  "gemini-2.5-pro": { inPerM: 1.25, outPerM: 5.0 },
-  "gemini-2.0-flash": { inPerM: 0.1, outPerM: 0.4 },
+  "gemini-3-flash-preview": { inPerM: 0.5, outPerM: 3.0 },
+  "gemini-3.1-flash-lite-preview": { inPerM: 0.25, outPerM: 1.5 },
 };
 
 // 2026-04-15: per-request Slack 알림은 제거 (시끄러워서). Redis에 시간/일/월
