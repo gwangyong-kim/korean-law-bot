@@ -22,11 +22,14 @@ interface McpCommit {
   message: string;
 }
 
-function parseReleaseBody(body: string): string[] {
-  return body
-    .split("\n")
-    .map((line) => line.replace(/^[-*]\s*/, "").trim())
-    .filter(Boolean);
+function parseRelease(body: string): { date: string | null; items: string[] } {
+  const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
+  const dateMatch = lines[0]?.match(/^\d{4}-\d{2}-\d{2}$/);
+  const content = dateMatch ? lines.slice(1) : lines;
+  return {
+    date: dateMatch ? dateMatch[0] : null,
+    items: content.map((l) => l.replace(/^[-*]\s*/, "").trim()).filter(Boolean),
+  };
 }
 
 export function UpdatesView() {
@@ -36,32 +39,17 @@ export function UpdatesView() {
   const [mcpLoading, setMcpLoading] = useState(true);
 
   useEffect(() => {
-    // Releases + Tags를 fetch한 뒤, 각 태그의 커밋 날짜를 개별 조회
-    Promise.all([
-      fetch(`https://api.github.com/repos/${APP_REPO}/releases?per_page=20`).then((r) => (r.ok ? r.json() : [])),
-      fetch(`https://api.github.com/repos/${APP_REPO}/tags?per_page=20`).then((r) => (r.ok ? r.json() : [])),
-    ])
-      .then(async ([releases, tags]: [AppRelease[], { name: string; commit: { sha: string; url: string } }[]]) => {
-        const tagToSha = new Map(tags.map((t) => [t.name, t.commit.sha]));
-        // 각 태그의 커밋 날짜를 병렬 fetch
-        const shas = [...new Set(tags.map((t) => t.commit.sha))];
-        const dateEntries = await Promise.all(
-          shas.map((sha) =>
-            fetch(`https://api.github.com/repos/${APP_REPO}/commits/${sha}`)
-              .then((r) => (r.ok ? r.json() : null))
-              .then((c) => [sha, c?.commit?.author?.date] as const)
-              .catch(() => [sha, undefined] as const),
-          ),
-        );
-        const shaToDate = new Map(dateEntries.filter(([, d]) => d));
+    // Releases만 fetch — body 첫 줄의 YYYY-MM-DD를 날짜로 사용
+    fetch(`https://api.github.com/repos/${APP_REPO}/releases?per_page=20`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((releases: AppRelease[]) =>
         setAppReleases(
           releases.map((r) => {
-            const sha = tagToSha.get(r.tag_name);
-            const commitDate = sha ? shaToDate.get(sha) : undefined;
-            return commitDate ? { ...r, published_at: commitDate } : r;
+            const { date } = parseRelease(r.body || "");
+            return date ? { ...r, published_at: date } : r;
           }),
-        );
-      })
+        ),
+      )
       .catch(() => setAppReleases([]))
       .finally(() => setAppLoading(false));
 
@@ -102,20 +90,23 @@ export function UpdatesView() {
                 {new Date(latest.published_at).toLocaleDateString("ko-KR")}
               </span>
             </div>
-            {latest.body && (
-              <ul className="mt-2 space-y-1">
-                {parseReleaseBody(latest.body).slice(0, 3).map((item) => (
-                  <li key={item} className="text-[length:var(--text-sm)] text-foreground/80">
-                    · {item}
-                  </li>
-                ))}
-                {parseReleaseBody(latest.body).length > 3 && (
-                  <li className="text-[length:var(--text-xs)] text-muted-foreground">
-                    외 {parseReleaseBody(latest.body).length - 3}건
-                  </li>
-                )}
-              </ul>
-            )}
+            {latest.body && (() => {
+              const { items } = parseRelease(latest.body);
+              return (
+                <ul className="mt-2 space-y-1">
+                  {items.slice(0, 3).map((item) => (
+                    <li key={item} className="text-[length:var(--text-sm)] text-foreground/80">
+                      · {item}
+                    </li>
+                  ))}
+                  {items.length > 3 && (
+                    <li className="text-[length:var(--text-xs)] text-muted-foreground">
+                      외 {items.length - 3}건
+                    </li>
+                  )}
+                </ul>
+              );
+            })()}
           </div>
         )}
 
@@ -137,7 +128,7 @@ export function UpdatesView() {
         ) : (
           <div className="space-y-6 mb-12">
             {appReleases.map((release, i) => {
-              const items = release.body ? parseReleaseBody(release.body) : [];
+              const { items } = release.body ? parseRelease(release.body) : { items: [] };
               return (
                 <div key={release.id} className="relative pl-6 pb-6 border-l-2 border-border last:border-l-0">
                   <div className="absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-primary bg-background" />
