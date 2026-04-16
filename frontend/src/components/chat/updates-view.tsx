@@ -4,17 +4,13 @@ import { useEffect, useState } from "react";
 import { History, Tag, Sparkles } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 const GITHUB_REPO = "chrisryugj/korean-law-mcp";
 
-interface Release {
-  id: number;
-  tag_name: string;
-  name: string;
-  body: string;
-  published_at: string;
+interface McpCommit {
+  sha: string;
+  date: string;
+  message: string;
 }
 
 interface AppUpdate {
@@ -91,14 +87,26 @@ const APP_UPDATES: AppUpdate[] = [
 ];
 
 export function UpdatesView() {
-  const [releases, setReleases] = useState<Release[]>([]);
+  const [mcpCommits, setMcpCommits] = useState<McpCommit[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=20`)
+    fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits?per_page=30`)
       .then((res) => (res.ok ? res.json() : []))
-      .then(setReleases)
-      .catch(() => setReleases([]))
+      .then((data: { sha: string; commit: { author: { date: string }; message: string } }[]) =>
+        data
+          .filter((c) => {
+            const msg = c.commit.message.split("\n")[0];
+            return /^(feat|fix|chore.*bump)/.test(msg);
+          })
+          .map((c) => ({
+            sha: c.sha.slice(0, 7),
+            date: c.commit.author.date.slice(0, 10),
+            message: c.commit.message.split("\n")[0],
+          }))
+      )
+      .then(setMcpCommits)
+      .catch(() => setMcpCommits([]))
       .finally(() => setLoading(false));
   }, []);
 
@@ -174,26 +182,24 @@ export function UpdatesView() {
               <div key={i} className="pl-6 space-y-2">
                 <Skeleton className="h-5 w-32" />
                 <Skeleton className="h-4 w-64" />
-                <Skeleton className="h-20 w-full" />
               </div>
             ))}
           </div>
-        ) : releases.length === 0 ? (
+        ) : mcpCommits.length === 0 ? (
           <p className="text-muted-foreground text-[length:var(--text-sm)]">
-            릴리스 정보를 불러올 수 없습니다.
+            업데이트 정보를 불러올 수 없습니다.
           </p>
         ) : (
-          <div className="space-y-6">
-            {releases.map((release, i) => (
-              <div key={release.id} className="relative pl-6 pb-6 border-l-2 border-border last:border-l-0">
+          <div className="space-y-4">
+            {mcpCommits.map((commit, i) => (
+              <div key={commit.sha} className="relative pl-6 pb-4 border-l-2 border-border last:border-l-0">
                 <div className="absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-primary bg-background" />
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[length:var(--text-xs)] font-medium text-primary">
-                    <Tag className="h-3 w-3" />
-                    {release.tag_name}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[length:var(--text-xs)] font-mono text-muted-foreground">
+                    {commit.sha}
                   </span>
                   <span className="text-[length:var(--text-xs)] text-muted-foreground">
-                    {new Date(release.published_at).toLocaleDateString("ko-KR")}
+                    {commit.date}
                   </span>
                   {i === 0 && (
                     <span className="rounded-full bg-success/10 px-2 py-0.5 text-[length:var(--text-xs)] font-medium text-success">
@@ -201,16 +207,7 @@ export function UpdatesView() {
                     </span>
                   )}
                 </div>
-                <h3 className="text-[length:var(--text-base)] font-medium mb-2">
-                  {release.name || release.tag_name}
-                </h3>
-                {release.body && (
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-[length:var(--text-sm)]
-                    [&_code]:text-[length:var(--text-xs)] [&_code]:bg-muted [&_code]:px-1 [&_code]:rounded
-                  ">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{release.body}</ReactMarkdown>
-                  </div>
-                )}
+                <p className="text-[length:var(--text-sm)] text-foreground/80">{commit.message}</p>
               </div>
             ))}
           </div>
@@ -218,12 +215,12 @@ export function UpdatesView() {
 
         <div className="mt-8 text-center">
           <a
-            href={`https://github.com/${GITHUB_REPO}/releases`}
+            href={`https://github.com/${GITHUB_REPO}/commits/main`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[length:var(--text-sm)] text-primary hover:underline"
           >
-            GitHub에서 전체 릴리스 보기 →
+            GitHub에서 전체 커밋 보기 →
           </a>
         </div>
       </div>
