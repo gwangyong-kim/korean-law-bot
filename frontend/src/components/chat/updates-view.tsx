@@ -36,15 +36,24 @@ export function UpdatesView() {
   const [mcpLoading, setMcpLoading] = useState(true);
 
   useEffect(() => {
-    // Releases + Tags + 최근 커밋을 병렬 fetch → 태그의 실제 커밋 날짜로 교체
+    // Releases + Tags를 fetch한 뒤, 각 태그의 커밋 날짜를 개별 조회
     Promise.all([
       fetch(`https://api.github.com/repos/${APP_REPO}/releases?per_page=20`).then((r) => (r.ok ? r.json() : [])),
       fetch(`https://api.github.com/repos/${APP_REPO}/tags?per_page=20`).then((r) => (r.ok ? r.json() : [])),
-      fetch(`https://api.github.com/repos/${APP_REPO}/commits?per_page=100`).then((r) => (r.ok ? r.json() : [])),
     ])
-      .then(([releases, tags, commits]: [AppRelease[], { name: string; commit: { sha: string } }[], { sha: string; commit: { author: { date: string } } }[]]) => {
+      .then(async ([releases, tags]: [AppRelease[], { name: string; commit: { sha: string; url: string } }[]]) => {
         const tagToSha = new Map(tags.map((t) => [t.name, t.commit.sha]));
-        const shaToDate = new Map(commits.map((c) => [c.sha, c.commit.author.date]));
+        // 각 태그의 커밋 날짜를 병렬 fetch
+        const shas = [...new Set(tags.map((t) => t.commit.sha))];
+        const dateEntries = await Promise.all(
+          shas.map((sha) =>
+            fetch(`https://api.github.com/repos/${APP_REPO}/commits/${sha}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .then((c) => [sha, c?.commit?.author?.date] as const)
+              .catch(() => [sha, undefined] as const),
+          ),
+        );
+        const shaToDate = new Map(dateEntries.filter(([, d]) => d));
         setAppReleases(
           releases.map((r) => {
             const sha = tagToSha.get(r.tag_name);
