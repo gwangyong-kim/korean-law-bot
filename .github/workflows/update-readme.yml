@@ -3,6 +3,7 @@ name: Update README with releases
 on:
   release:
     types: [published, edited]
+  workflow_dispatch:
 
 permissions:
   contents: write
