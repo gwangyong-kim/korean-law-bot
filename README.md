@@ -48,3 +48,7 @@ korean-law-bot/
     ├── src/lib/                 # 유틸리티 (모델, 출처, 에러, 비용)
     └── vercel.json              # Vercel 배포 설정
 ```
+
+## 업데이트 내역
+
+> 이 섹션은 GitHub Release 생성 시 자동으로 갱신됩니다.

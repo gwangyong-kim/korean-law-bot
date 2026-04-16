@@ -1,0 +1,59 @@
+name: Update README with releases
+
+on:
+  release:
+    types: [published, edited]
+
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate changelog and update README
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 20,
+            });
+
+            let changelog = '## 업데이트 내역\n\n';
+            for (const r of releases) {
+              // <!-- date: YYYY-MM-DD --> 주석에서 날짜 추출, 없으면 published_at 사용
+              const dateMatch = (r.body || '').match(/<!--\s*date:\s*(\d{4}-\d{2}-\d{2})\s*-->/);
+              const date = dateMatch ? dateMatch[1] : r.published_at.slice(0, 10);
+              const body = (r.body || '')
+                .replace(/<!--\s*date:\s*\d{4}-\d{2}-\d{2}\s*-->\n?/, '')
+                .trim();
+
+              changelog += `### ${r.tag_name} — ${r.name || r.tag_name} (${date})\n\n`;
+              if (body) changelog += `${body}\n\n`;
+            }
+
+            const fs = require('fs');
+            let readme = fs.readFileSync('README.md', 'utf8');
+
+            const marker = '## 업데이트 내역';
+            const idx = readme.indexOf(marker);
+            if (idx !== -1) {
+              readme = readme.slice(0, idx) + changelog.trimEnd() + '\n';
+            } else {
+              readme = readme.trimEnd() + '\n\n' + changelog.trimEnd() + '\n';
+            }
+
+            fs.writeFileSync('README.md', readme);
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "docs: README 업데이트 내역 자동 갱신"
+          git push
