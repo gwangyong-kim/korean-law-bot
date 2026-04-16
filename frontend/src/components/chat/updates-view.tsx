@@ -23,13 +23,14 @@ interface McpCommit {
 }
 
 function parseRelease(body: string): { date: string | null; items: string[] } {
-  const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
-  const dateMatch = lines[0]?.match(/^\d{4}-\d{2}-\d{2}$/);
-  const content = dateMatch ? lines.slice(1) : lines;
-  return {
-    date: dateMatch ? dateMatch[0] : null,
-    items: content.map((l) => l.replace(/^[-*]\s*/, "").trim()).filter(Boolean),
-  };
+  // <!-- date: YYYY-MM-DD --> 형식의 HTML 주석에서 날짜 추출
+  const commentMatch = body.match(/<!--\s*date:\s*(\d{4}-\d{2}-\d{2})\s*-->/);
+  const cleaned = body.replace(/<!--\s*date:\s*\d{4}-\d{2}-\d{2}\s*-->\n?/, "");
+  const items = cleaned
+    .split("\n")
+    .map((l) => l.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean);
+  return { date: commentMatch ? commentMatch[1] : null, items };
 }
 
 export function UpdatesView() {
