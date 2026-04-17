@@ -114,20 +114,63 @@ export function ChatContainer({
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // 스크롤 위치 감지: 사용자가 위로 스크롤하면 자동 스크롤 중단,
-  // 하단 근처로 돌아오면 자동 스크롤 재개.
+  // 사용자 의도 감지: wheel/touch/keyboard로 위로 스크롤하면 auto-scroll 해제.
+  // scroll 이벤트가 아닌 입력 이벤트를 사용하는 이유:
+  // scroll 이벤트는 프로그램적 scrollTop 변경(아래 effect)에도 발동되어
+  // stickToBottom 플래그가 self-reset되는 루프가 생긴다. 입력 이벤트는
+  // 사용자의 실제 동작만 포착하므로 이 루프를 끊어준다.
   useEffect(() => {
     const viewport = scrollRef.current?.querySelector<HTMLElement>(
       '[data-slot="scroll-area-viewport"]',
     );
     if (!viewport) return;
+
+    function isAwayFromBottom(el: HTMLElement) {
+      // 80px threshold: 스트리밍 중 새 청크로 scrollHeight가 급변해도
+      // 사용자가 "충분히 위로" 올라간 케이스만 감지 (기존 50px은 너무 민감).
+      return el.scrollHeight - el.scrollTop - el.clientHeight > 80;
+    }
+
+    // 사용자 제스처: 위로 스크롤 의도 감지 → sticky 해제
+    function onUserScroll() {
+      if (isAwayFromBottom(viewport!)) {
+        stickToBottomRef.current = false;
+      }
+    }
+
+    function onKey(e: KeyboardEvent) {
+      // PageUp/ArrowUp/Home: 위로 이동 의도
+      if (e.key === "PageUp" || e.key === "ArrowUp" || e.key === "Home") {
+        // rAF로 한 프레임 지연 — 키가 적용된 후의 scrollTop을 읽기 위함
+        requestAnimationFrame(() => {
+          if (isAwayFromBottom(viewport!)) {
+            stickToBottomRef.current = false;
+          }
+        });
+      }
+    }
+
+    // 하단 복귀 감지: 사용자(또는 프로그램)가 하단 근처에 도달하면 sticky 재활성화.
+    // 프로그램적 스크롤이 이를 트리거해도 이미 true → no-op이라 루프 없음.
     function onScroll() {
       const el = viewport!;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-      stickToBottomRef.current = distanceFromBottom < 50;
+      if (distanceFromBottom < 80) {
+        stickToBottomRef.current = true;
+      }
     }
+
+    viewport.addEventListener("wheel", onUserScroll, { passive: true });
+    viewport.addEventListener("touchmove", onUserScroll, { passive: true });
+    viewport.addEventListener("keydown", onKey);
     viewport.addEventListener("scroll", onScroll, { passive: true });
-    return () => viewport.removeEventListener("scroll", onScroll);
+
+    return () => {
+      viewport.removeEventListener("wheel", onUserScroll);
+      viewport.removeEventListener("touchmove", onUserScroll);
+      viewport.removeEventListener("keydown", onKey);
+      viewport.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   // 새 메시지/스트리밍 시 하단 스크롤 — 사용자가 위로 스크롤한 상태면 건너뜀.
