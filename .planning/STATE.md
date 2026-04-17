@@ -49,6 +49,12 @@ Four prior fix commits targeted the wrong layer (client `getMessageText`). Real 
 
 `/gsd-plan-phase 1` — generate detailed execution plan for Phase 1.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260417-ou0 | AI 가 대답 출력시 스크롤이 자동으로 내려가지않도록 수정해줘 | 2026-04-17 | 770ef82 | [260417-ou0-ai](./quick/260417-ou0-ai/) |
+
 ## Notes
 
 - Brownfield project, single developer (혼자 개발/검증).
@@ -58,4 +64,4 @@ Four prior fix commits targeted the wrong layer (client `getMessageText`). Real 
 - Frontend has `CLAUDE.md @AGENTS.md` warning: "This is NOT the Next.js you know" — always verify Next 16 + AI SDK 6 API shapes against installed `node_modules` before coding.
 
 ---
-*Last updated: 2026-04-13 after initial project setup*
+*Last activity: 2026-04-17 - Completed quick task 260417-ou0: AI 가 대답 출력시 스크롤이 자동으로 내려가지않도록 수정해줘*
