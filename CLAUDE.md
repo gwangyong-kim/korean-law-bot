@@ -33,6 +33,8 @@
 - **GitHub Release는 사용자가 수동으로 발행한다 (Claude가 자동 생성 금지).**
 - Release 내용(태그명, 제목, 본문)은 Claude가 초안을 제시하고 **사용자 검토·승인 후**에만 생성/푸시.
 - 본문 첫 줄에 `<!-- date: YYYY-MM-DD -->` 주석 권장 — `update-readme.yml`이 README의 업데이트 내역 날짜로 사용.
+- 본문 형식: `## 헤딩` 없이 단순 bullet list, 각 항목은 `[제목] — [설명]` 패턴 (v1.5/v1.6 참고).
+- Release publish/edit → `update-readme.yml` 자동 트리거 → README의 `## 업데이트 내역` 섹션 갱신 (최신 20개). `release` 이벤트는 detached HEAD가 되므로 `actions/checkout`에 `ref: master` 명시 필수.
 
 ## Chat UI Tech Notes
 - AI SDK v6 스트리밍: `smoothStream` → `experimental_transform` 옵션으로 적용. 한국어 청킹은 `Intl.Segmenter("ko", { granularity: "grapheme" })` 필수 (기본 `word` 모드는 CJK 미지원)
