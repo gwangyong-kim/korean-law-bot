@@ -109,24 +109,43 @@ export function ChatContainer({
     } catch { return new Set(); }
   });
   const scrollRef = useRef<HTMLDivElement>(null);
-  const stickToBottomRef = useRef(true);
+  const lastUserIdRef = useRef<string | null>(null);
   const prevLenRef = useRef(0);
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // 스크롤 동작: 사용자가 새 메시지를 전송한 직후 한 번만 하단으로 이동.
-  // 이후 스트리밍 토큰이 도착해도 스크롤은 그대로 유지된다.
-  // handleSubmit에서 stickToBottomRef.current = true 로 일회성 신호를 켜고,
-  // 아래 effect가 한 번 스크롤한 뒤 즉시 false로 되돌려 다음 토큰부터는 무시한다.
+  // 스크롤 동작: 사용자가 새 메시지를 전송하면 그 prompt 버블을 viewport 상단으로
+  // 정렬한다. 이후 스트리밍 토큰이 쌓여도 스크롤은 그대로 유지된다.
+  // 신규 user 메시지는 messages 배열의 마지막 user role 항목 id로 감지한다 —
+  // handleSubmit/handleExampleClick 양쪽에 추가 코드 없이 자동 동작.
+  // scrollIntoView({block:'start'})는 ScrollArea Root까지 스크롤시키지 않도록
+  // 직접 viewport.scrollTop을 조작한다 (외부 페이지 스크롤 회피).
   useEffect(() => {
-    if (!stickToBottomRef.current) return;
+    let latestUserId: string | null = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        latestUserId = messages[i].id;
+        break;
+      }
+    }
+    if (!latestUserId || latestUserId === lastUserIdRef.current) return;
+    lastUserIdRef.current = latestUserId;
+
     const viewport = scrollRef.current?.querySelector<HTMLElement>(
       '[data-slot="scroll-area-viewport"]',
     );
-    if (viewport) {
-      viewport.scrollTop = viewport.scrollHeight;
-    }
-    stickToBottomRef.current = false;
+    if (!viewport) return;
+    // rAF로 한 프레임 지연: bottom spacer (isLoading 분기) 가 DOM에 반영된
+    // 후의 scrollHeight를 사용해야 maxScrollTop에 clamp 안 당한다.
+    requestAnimationFrame(() => {
+      const target = viewport.querySelector<HTMLElement>(
+        `[data-message-id="${latestUserId}"]`,
+      );
+      if (!target) return;
+      const targetRect = target.getBoundingClientRect();
+      const viewportRect = viewport.getBoundingClientRect();
+      viewport.scrollTop += targetRect.top - viewportRect.top;
+    });
   }, [messages]);
 
   // 메시지 변경 시 localStorage에 저장.
@@ -188,7 +207,6 @@ export function ChatContainer({
       sendMessage({ text: fullText }, opts);
     }
     setInput("");
-    stickToBottomRef.current = true;
   }
 
   function handleExampleClick(question: string) {
@@ -314,6 +332,12 @@ export function ChatContainer({
                 isRetryDisabled={isLoading}
               />
             )}
+            {/*
+              Bottom spacer: 스트리밍 중 마지막 user prompt가 viewport 상단에
+              붙도록 충분한 스크롤 공간 확보. 70vh = viewport - 입력영역/헤더 여유.
+              isLoading 중에만 렌더해 평소 빈 공간이 안 보이게 한다.
+            */}
+            {isLoading && <div aria-hidden className="min-h-[70vh]" />}
           </div>
         )}
       </ScrollArea>

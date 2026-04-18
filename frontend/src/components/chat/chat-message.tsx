@@ -73,7 +73,7 @@ export function ChatMessage({
   // ─── User path: bubble kept (right-aligned primary) ──────────────────
   if (isUser) {
     return (
-      <div className="group flex flex-row-reverse gap-3 py-4">
+      <div data-message-id={id} className="group flex flex-row-reverse gap-3 py-4">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <User className="h-4 w-4" />
         </div>
