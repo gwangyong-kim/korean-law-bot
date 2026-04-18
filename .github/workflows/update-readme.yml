@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        # release 이벤트는 기본적으로 태그를 체크아웃해 detached HEAD가 되므로
+        # 명시적으로 master 브랜치를 체크아웃해야 이후 git push가 성공한다.
+        with:
+          ref: master
 
       - name: Generate changelog and update README
         uses: actions/github-script@v7
