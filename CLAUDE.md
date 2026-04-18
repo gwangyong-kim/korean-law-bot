@@ -1,5 +1,12 @@
 # korean-law-bot
 
+## Commands
+- Dev (3001): `cd frontend && npm run dev -- -p 3001` (3000은 다른 앱이 점유 가능)
+- Build: `cd frontend && npm run build`
+- Lint: `cd frontend && npm run lint`
+- Type check: `cd frontend && npx tsc --noEmit`
+- 필수 env vars: `frontend/.env.local.example` 참고 (AUTH_*, GEMINI_API_KEY, LAW_API_KEY)
+
 ## Architecture
 - Frontend (이 리포): Next.js 채팅 UI, Vercel 배포
 - 프로덕션 프론트엔드: `https://frontend-phi-six-16.vercel.app/`
