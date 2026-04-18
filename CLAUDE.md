@@ -29,6 +29,11 @@
 - MCP 서버 리포: global git config 없음 — 커밋 시 `-c user.name/email` 필요
 - MCP 서버 리포 remotes: `origin` = 사용자 fork, `upstream` = `chrisryugj/korean-law-mcp`
 
+## Releases
+- **GitHub Release는 사용자가 수동으로 발행한다 (Claude가 자동 생성 금지).**
+- Release 내용(태그명, 제목, 본문)은 Claude가 초안을 제시하고 **사용자 검토·승인 후**에만 생성/푸시.
+- 본문 첫 줄에 `<!-- date: YYYY-MM-DD -->` 주석 권장 — `update-readme.yml`이 README의 업데이트 내역 날짜로 사용.
+
 ## Chat UI Tech Notes
 - AI SDK v6 스트리밍: `smoothStream` → `experimental_transform` 옵션으로 적용. 한국어 청킹은 `Intl.Segmenter("ko", { granularity: "grapheme" })` 필수 (기본 `word` 모드는 CJK 미지원)
 - 대화 컨텍스트 유지: `useChat({ messages })` 로 과거 대화를 UIMessage 포맷으로 reseed. `splitContextWindow()`가 최근 10턴/8000자로 제한
