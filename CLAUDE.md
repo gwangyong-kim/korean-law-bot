@@ -17,6 +17,7 @@
 - sync workflow가 직접 deploy하는 이유: GITHUB_TOKEN의 push는 다른 workflow를 트리거하지 않음
 
 ## Git
+- **`git push` 금지: 사용자가 명시적으로 요청할 때만 push할 것.** Vercel 자동 배포가 연결되어 push = 즉시 프로덕션 배포.
 - 이 리포의 git user: `gwangyong-kim <rainshadow66@gmail.com>` (local config)
 - MCP 서버 리포: global git config 없음 — 커밋 시 `-c user.name/email` 필요
 - MCP 서버 리포 remotes: `origin` = 사용자 fork, `upstream` = `chrisryugj/korean-law-mcp`
@@ -31,3 +32,5 @@
 ## Gotchas
 - Fork 리포의 GitHub Actions는 브라우저 UI에서 수동 활성화 필요 (API/CLI로 불가)
 - Fly.io merge-upstream API 결과: "fast-forward" 또는 "merge"면 변경 있음, 빈 응답이면 이미 최신
+- 로컬 포트 3000에 다른 앱(MRP WO) 점유 가능 → dev 서버는 `-p 3001` 사용
+- AI SDK API 문서: Context7 할당량 초과 시 `node_modules/ai/dist/index.d.ts` 직접 참조
