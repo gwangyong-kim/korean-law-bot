@@ -26,10 +26,23 @@ export interface Citation {
    * Best-effort article identifier (e.g. `제60조`, `제60조제1항`).
    */
   article?: string;
+  /**
+   * Court name for case citations (e.g. `대법원`, `헌법재판소`).
+   * Mutually exclusive with `lawName` in practice — set when the
+   * citation is a 판례 instead of a 법령 조문.
+   */
+  court?: string;
+  /**
+   * Case number for court decisions (e.g. `2009도14442`, `2019다12345`).
+   * Used to construct the 판례 search URL on 국가법령정보센터.
+   */
+  caseNumber?: string;
 }
 
 const CITATION_RE = /\[출처:\s*([^\]]+?)\]/g;
 const ARTICLE_RE = /^(.+?)\s+(제[\d조항의가-힣]+)(?:\(([^)]+)\))?/;
+// 대법원/헌법재판소/하급심 + 사건번호(YYYY+한글계+숫자, 예: 2009도14442, 2019다12345, 2017헌가12)
+const CASE_RE = /^(대법원|헌법재판소|.+?법원)\s+(\d{2,4}[가-힣]+\d+)/;
 
 /**
  * Extract all `[출처: ...]` citations from markdown content and return the
@@ -56,6 +69,20 @@ export function extractCitations(text: string): {
     seen.add(raw);
 
     const firstSegment = raw.split(",")[0].trim();
+    // 판례 형식("대법원 2009도14442 ...")을 먼저 시도하고,
+    // 매치 안 되면 법령 조문 형식("근로기준법 제60조 ...")을 시도한다.
+    // 판례를 먼저 보는 이유: 법원명 안에 "법원"이 들어있어
+    // ARTICLE_RE(`(.+?)\s+제N조`)에는 매칭되지 않지만, 안전을 위해
+    // 더 구체적인 패턴(CASE_RE)을 우선 적용.
+    const caseMatch = firstSegment.match(CASE_RE);
+    if (caseMatch) {
+      citations.push({
+        raw,
+        court: caseMatch[1].trim(),
+        caseNumber: caseMatch[2].trim(),
+      });
+      continue;
+    }
     const articleMatch = firstSegment.match(ARTICLE_RE);
     const lawName = articleMatch?.[1]?.trim();
     const article = articleMatch?.[2]?.trim();
@@ -87,11 +114,20 @@ export function extractCitations(text: string): {
  * pre-filled, one click away from the authoritative source.
  */
 export function buildLawGoKrUrl(c: Citation): string | undefined {
-  if (!c.lawName) return undefined;
-  const query = c.article ? `${c.lawName} ${c.article}` : c.lawName;
-  return `https://www.law.go.kr/LSW/lsSc.do?menuId=1&subMenuId=15&tabMenuId=81&query=${encodeURIComponent(
-    query,
-  )}`;
+  // 판례: 사건번호로 국가법령정보센터 판례 검색.
+  if (c.caseNumber) {
+    return `https://www.law.go.kr/LSW/precSc.do?menuId=1&query=${encodeURIComponent(
+      c.caseNumber,
+    )}`;
+  }
+  // 법령 조문: 법령명 + 조문으로 통합 검색.
+  if (c.lawName) {
+    const query = c.article ? `${c.lawName} ${c.article}` : c.lawName;
+    return `https://www.law.go.kr/LSW/lsSc.do?menuId=1&subMenuId=15&tabMenuId=81&query=${encodeURIComponent(
+      query,
+    )}`;
+  }
+  return undefined;
 }
 
 /**
@@ -100,6 +136,7 @@ export function buildLawGoKrUrl(c: Citation): string | undefined {
  * couldn't structure it.
  */
 export function citationLabel(c: Citation): string {
+  if (c.court && c.caseNumber) return `${c.court} ${c.caseNumber}`;
   if (c.lawName && c.article) return `${c.lawName} ${c.article}`;
   return c.raw;
 }
