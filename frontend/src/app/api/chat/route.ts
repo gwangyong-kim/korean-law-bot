@@ -431,35 +431,44 @@ export async function POST(req: Request) {
     stopWhen: stepCountIs(8),
     ...(Object.keys(tools).length > 0 ? { tools } : {}),
     // 2026-04-15: tool 체인 실패 진단용 관측 로깅. "도구 검색은 완료했는데
-    // 시스템 오류로 확인 못했다"류 fallback 응답의 원인(어떤 tool이 에러를
-    // 반환했는지, 또는 stepCountIs 한도에 걸렸는지)을 확정하기 위함.
+    // 시스템 오류로 확인 못했다"류 fallback 응답의 원인을 확정하기 위함.
+    // Vercel log viewer가 long-line을 자르는 걸 피해 각 tool을 별도 줄로,
+    // 실패 시 console.error로 full raw result를 dump.
     onStepFinish: ({ toolCalls, toolResults, finishReason }) => {
       if (toolCalls.length === 0) return;
-      const parts = toolCalls.map((call) => {
+      toolCalls.forEach((call) => {
         const callId = (call as { toolCallId?: string }).toolCallId;
         const matched = toolResults.find(
           (r) => (r as { toolCallId?: string }).toolCallId === callId
         );
-        const argsStr = (() => {
+        const args = (() => {
           try {
-            return JSON.stringify((call as { input?: unknown }).input ?? {}).slice(0, 120);
+            return JSON.stringify((call as { input?: unknown }).input ?? {}).slice(0, 300);
           } catch {
             return "?";
           }
         })();
-        if (!matched) return `${call.toolName}(${argsStr})=pending`;
+        if (!matched) {
+          console.log(`[tool-pending] ${call.toolName} args=${args}`);
+          return;
+        }
+        let full: string;
         try {
-          const json = JSON.stringify(matched);
-          const errMatch = json.match(/"error"\s*:\s*"([^"]{0,150})"/);
-          if (errMatch) return `${call.toolName}(${argsStr})=ERR:${errMatch[1]}`;
-          return `${call.toolName}(${argsStr})=ok:${json.length}b`;
+          full = JSON.stringify(matched);
         } catch {
-          return `${call.toolName}(${argsStr})=unserializable`;
+          console.error(`[tool-unserializable] ${call.toolName} args=${args}`);
+          return;
+        }
+        const hasError = /"error"\s*:/.test(full);
+        if (hasError) {
+          console.error(
+            `[tool-err] ${call.toolName} args=${args} raw=${full.slice(0, 1500)}`
+          );
+        } else {
+          console.log(`[tool-ok] ${call.toolName} args=${args} size=${full.length}b`);
         }
       });
-      console.log(
-        `[route.ts] step finishReason=${finishReason} tools=[${parts.join(" | ")}]`
-      );
+      console.log(`[step] finishReason=${finishReason}`);
     },
     onFinish: async ({ finishReason, usage }) => {
       console.log("[route.ts] streamText finishReason:", finishReason, "usage:", usage);

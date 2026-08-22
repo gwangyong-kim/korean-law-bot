@@ -85,11 +85,16 @@ export function ChatContainer({
   // Base UI ScrollArea는 Root를 forwardRef 대상으로 넘기고, 실제 scrollable
   // 요소는 내부의 Viewport(data-slot="scroll-area-viewport")다. Root의
   // scrollTop을 건드리면 아무 효과가 없다 — Viewport를 직접 찾아서 scroll.
+  // 단, 사용자가 위로 스크롤한 상태에서는 자동 스크롤하지 않는다 — 읽고 있는
+  // 위치가 강제로 하단으로 끌려가는 걸 막기 위함.
   useEffect(() => {
     const viewport = scrollRef.current?.querySelector<HTMLElement>(
       '[data-slot="scroll-area-viewport"]',
     );
-    if (viewport) {
+    if (!viewport) return;
+    const distanceFromBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    if (distanceFromBottom < 100) {
       viewport.scrollTop = viewport.scrollHeight;
     }
   }, [messages]);
